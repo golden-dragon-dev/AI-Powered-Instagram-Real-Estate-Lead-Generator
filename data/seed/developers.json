@@ -1,0 +1,12 @@
+[
+  {
+    "id": "dev_aldar",
+    "name": "Aldar",
+    "active": true
+  },
+  {
+    "id": "dev_modon",
+    "name": "Modon",
+    "active": true
+  }
+]

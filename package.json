@@ -1,0 +1,16 @@
+{
+  "name": "uae-real-estate-ai",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Abu Dhabi Instagram real-estate assistant. Milestone 1: Airtable schema, buyer model, matching, fact retrieval.",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test --test-reporter=spec test/step1-schema.test.js test/step2-buyer-model.test.js test/step3-matching.test.js test/step4-fact-retrieval.test.js test/step5-fact-checker.test.js test/step6-acceptance.test.js",
+    "verify": "node scripts/verify-milestone1.js",
+    "match": "node scripts/match-cli.js",
+    "import-seed": "node scripts/import-seed.js"
+  }
+}
