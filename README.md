@@ -1,47 +1,37 @@
-# UAE Real Estate AI
+# Abu Dhabi property lead system
 
-Abu Dhabi Instagram lead system. This repo currently implements **Milestone 1**.
+Instagram enquiry system for Abu Dhabi real estate. Milestone 1 covers the property database, buyer records, matching, and confirmed-data replies.
 
-Milestone 1 is the data layer only. No Instagram, Claude, or HubSpot yet.
+Later milestones add conversation flow, Instagram, HubSpot, and live deploy.
 
-## What Milestone 1 includes
+## Milestone 1
 
-- Airtable-ready developer, project, and unit schema
-- Local JSON catalog that matching code already uses
-- Buyer card keyed by Instagram user id
-- Matching in code by budget, cash, area, developer, type, bedrooms, payment plan
-- Fact retrieval that returns null instead of guessing
-- Fact checker that blocks invented prices, plans, dates, and availability
-- Missing data does not trigger a human handoff
+- Developer, project, and unit tables (Airtable-ready)
+- Local catalog used by matching code
+- Buyer record keyed by Instagram user id
+- Matching by budget, cash, area, developer, type, bedrooms, and payment plan
+- Replies use approved fields only
+- Unknown prices, plans, dates, and availability are blocked
+- Missing fields do not send the enquiry to an agent
 
 ## Run
 
-Node 18+ is required. No npm packages are required.
+Node 18 or newer. No extra packages.
 
 ```bash
-node --test test/step1-schema.test.js test/step2-buyer-model.test.js test/step3-matching.test.js test/step4-fact-retrieval.test.js test/step5-fact-checker.test.js test/step6-acceptance.test.js
+npm test
 npm run verify
 npm run match -- --budget 3M --cash 500k --area "Yas" --bedrooms 3 --payment-plan
 ```
 
-On Windows PowerShell use:
+How to check each part is in `docs/MILESTONE_1.md`. `npm run verify` prints PASS or FAIL for each check.
 
-```powershell
-npm test
-npm run verify
-```
+## Sample listings
 
-## Codex test order
+`data/seed` is demo Abu Dhabi stock for tests. It is not live inventory. Replace it in Airtable later. Matching code stays the same.
 
-Follow `docs/MILESTONE_1.md` from step 1 to step 12. `npm run verify` prints PASS or FAIL for each step.
+## Next milestones
 
-## Sample data
-
-`data/seed` is a demo Abu Dhabi set for tests. It is not live inventory. Replace it in Airtable later without changing matcher code.
-
-## Later milestones
-
-- Milestone 2: conversation, qualification, buyer memory in the assistant, fact check before send
-- Milestone 3: Instagram Messaging API, HubSpot, high-intent pings
+- Milestone 2: conversation, qualification, saved buyer details, reply checks before send
+- Milestone 3: Instagram Messaging API, HubSpot, high-intent alerts
 - Milestone 4: acceptance tests, production deploy, docs, handover
-"# AI-Powered-Instagram-Real-Estate-Lead-Generator" 

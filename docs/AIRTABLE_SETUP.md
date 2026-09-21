@@ -1,6 +1,6 @@
 # Airtable setup
 
-The matcher does not read Airtable until `AIRTABLE_API_KEY` and `AIRTABLE_BASE_ID` are set. Tests use `data/seed` so Codex can verify Milestone 1 without Airtable.
+Matching does not read Airtable until `AIRTABLE_API_KEY` and `AIRTABLE_BASE_ID` are set. Tests use `data/seed`, so Milestone 1 can be checked without Airtable.
 
 Create one base with three tables. Field names must match exactly.
 
@@ -30,13 +30,13 @@ Create one base with three tables. Field names must match exactly.
 | Availability notes | Long text | |
 | Source | Single line text | Required while Active |
 | Last verified | Date | Required while Active |
-| Active | Checkbox | Off rows never reach Instagram later |
+| Active | Checkbox | Off rows stay out of matching |
 
 ## Table Units
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| Name | Single line text | Auto, e.g. Yas Park Views 3BR |
+| Name | Single line text | Example: Yas Park Views 3BR |
 | Project | Link to Projects | Required |
 | Property type | Single select | apartment, villa, townhouse, penthouse, studio |
 | Bedrooms | Number | Studio is 0 |
@@ -47,14 +47,14 @@ Create one base with three tables. Field names must match exactly.
 | Availability | Single select | Available, Limited, Sold out, Unknown |
 | Active | Checkbox | |
 
-## Rules for the non-developer editor
+## Editing listings
 
 - To add a developer, add a Developers row and keep Active on.
 - To add a project, add a Projects row, then add one Units row per bedroom type.
 - To change a price, edit Starting price AED on the unit. Do not edit code.
 - To disable outdated data, uncheck Active on the project or unit.
-- Empty price, plan, handover, or availability is allowed. The assistant must say it is not confirmed. It must not invent a number. It must not hand off only because a field is empty.
+- Empty price, plan, handover, or availability is allowed. Replies must say it is not confirmed. Do not fill in a number. Do not pass the lead to an agent only because a field is empty.
 
-## Import the demo set
+## Demo set
 
 Copy rows from `data/seed/developers.json`, `projects.json`, and `units.json`. Demo figures are for matching tests, not live sales.

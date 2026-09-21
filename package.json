@@ -1,9 +1,9 @@
 {
-  "name": "uae-real-estate-ai",
+  "name": "abu-dhabi-property-leads",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Abu Dhabi Instagram real-estate assistant. Milestone 1: Airtable schema, buyer model, matching, fact retrieval.",
+  "description": "Abu Dhabi Instagram property lead system. Milestone 1: listing database, buyer records, matching, confirmed-data replies.",
   "engines": {
     "node": ">=18"
   },

@@ -98,6 +98,6 @@ export function missingDataHandoff(packs) {
   return {
     missingFields: [...new Set(missing)],
     handoffRequired: false,
-    reason: "Missing data stays in the assistant. It does not transfer to a human."
+    reason: "Missing listing fields stay unanswered. They do not send the enquiry to an agent."
   };
 }

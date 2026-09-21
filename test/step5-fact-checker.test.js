@@ -31,7 +31,7 @@ test("step 5c invented handover date is blocked", async () => {
   assert.ok(check.violations.some((row) => row.type === "date"));
 });
 
-test("step 5d generated safe reply always passes the checker", async () => {
+test("step 5d safe reply always passes the checker", async () => {
   const { properties } = await setupServices();
   const packs = properties.factsFor(properties.match(YAS_3M_CRITERIA));
   const reply = renderSafeReply(packs);

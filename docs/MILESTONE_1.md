@@ -1,11 +1,11 @@
-# Milestone 1 verification
+# Milestone 1 checks
 
-Codex should run these steps in order. Do not skip. A step fails if the command exits non-zero or the assertion in `scripts/verify-milestone1.js` prints FAIL.
+Run these in order. A step fails if the command exits non-zero or `scripts/verify-milestone1.js` prints FAIL.
 
-## Stack under test
+## What this uses
 
-- Node 18+
-- Local catalog in `data/seed`
+- Node 18 or newer
+- Local listings in `data/seed`
 - Matching and fact retrieval in `src/`
 - Airtable is optional. Tests must pass without Airtable keys.
 
@@ -33,7 +33,7 @@ Checks:
 - `Old Yas Towers` is hidden unless `includeInactive` is true
 - A studio row cannot be stored as 3 bedroom
 
-## Step 2. Buyer data model
+## Step 2. Buyer records
 
 ```bash
 node --test test/step2-buyer-model.test.js
@@ -43,13 +43,13 @@ Expected: all tests pass.
 
 Checks:
 
-- New Instagram id creates a buyer card
+- A new Instagram id creates a buyer record
 - `AED 3M`, `500k`, `Yas`, `3BR` store as `3000000`, `500000`, `Yas Island`, `[3]`
 - A later message does not wipe earlier budget or area
-- Returning user loads the same card
+- A returning visitor loads the same record
 - Empty values cannot clear name or phone
 
-## Step 3. Property matching in code
+## Step 3. Property matching
 
 ```bash
 node --test test/step3-matching.test.js
@@ -57,7 +57,7 @@ node --test test/step3-matching.test.js
 
 Expected: all tests pass.
 
-Locked query:
+Query used here:
 
 - Budget AED 3,000,000
 - Cash AED 500,000
@@ -70,12 +70,12 @@ Expected match: only `Yas Park Views` 3 bedroom at AED 2,600,000 with AED 260,00
 Must not match:
 
 - `Yas Studio One` (no 3 bedroom)
-- `Yas Waterfront Residences` (price unconfirmed)
+- `Yas Waterfront Residences` (price not confirmed)
 - `Yas Grove Residences` (AED 800,000 initial)
 - `Old Yas Towers` (inactive)
 - Hudayriyat rows (wrong area)
 
-## Step 4. Fact retrieval
+## Step 4. Confirmed listing fields
 
 ```bash
 node --test test/step4-fact-retrieval.test.js
@@ -89,7 +89,7 @@ Checks:
 - Missing price, plan, handover, and availability stay `confirmed: false`
 - A studio price is not copied onto a 3 bedroom row
 
-## Step 5. Fact checker
+## Step 5. Reply checks
 
 ```bash
 node --test test/step5-fact-checker.test.js
@@ -102,11 +102,11 @@ Checks:
 - AED 2,600,000 is allowed for Yas Park Views
 - AED 2,100,000 is blocked
 - Q1 2025 is blocked when handover is Q4 2027
-- Generated safe reply passes the checker
+- Built replies pass the checker
 - Missing data does not set `handoffRequired`
 - Zero matches does not set `handoffRequired`
 
-## Step 6. Acceptance lines used in the client brief
+## Step 6. Sample buyer lines
 
 ```bash
 node --test test/step6-acceptance.test.js
@@ -137,7 +137,7 @@ Milestone 1 verification passed.
 
 Every numbered line above that must print `PASS`.
 
-## Step 8. Manual matching CLI
+## Step 8. Matching from the command line
 
 ```bash
 npm run match -- --budget 3M --cash 500k --area "Yas" --bedrooms 3 --payment-plan
@@ -160,15 +160,15 @@ Expected: `Yas Studio One` only. `Yas Park Views` must be absent.
 
 ## Airtable mapping
 
-Matching reads this internal shape, whether the store is JSON or Airtable:
+Matching reads this shape from JSON or Airtable:
 
 - Developers: Name, Active
 - Projects: Name, Developer, Emirate, Area, Property types, Status, Handover, Payment plan available, Payment plan summary, Required initial payment AED, Description, Features, Availability notes, Source, Last verified, Active
 - Units: Project, Property type, Bedrooms, Starting price AED, Size sqft from, Size sqft to, Initial payment AED, Availability, Active
 
-See `docs/AIRTABLE_SETUP.md` to recreate the base. Do not put prices in prompts. Change a price in the Units table only.
+See `docs/AIRTABLE_SETUP.md` to recreate the base. Do not hardcode prices. Change a price on the unit row only.
 
-## Milestone 1 done when
+## Milestone 1 is done when
 
 - `npm test` passes
 - `npm run verify` passes
