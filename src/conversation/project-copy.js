@@ -65,17 +65,18 @@ export function renderProjectIntro({ buyer, packs, mode = "exact" }) {
     projectNames.length === 1
       ? projectNames[0]
       : projectNames.slice(0, 2).join(" and ");
+  const verb = projectNames.length === 1 ? "is" : "are";
 
   let opener;
   if (budget && area) {
     opener =
       mode === "exact"
-        ? `${budget} opens a few doors on ${area}. ${lead} is worth a look.`
-        : `I do not have an exact fit for every detail yet, but on ${area} around ${budget}, ${lead} is a solid confirmed option.`;
+        ? `${budget} opens a few doors on ${area}. ${lead} ${verb} worth a look.`
+        : `I do not have an exact fit for every detail yet, but on ${area} around ${budget}, ${lead} ${verb} a solid confirmed option.`;
   } else if (area) {
-    opener = `On ${area}, ${lead} is worth a look.`;
+    opener = `On ${area}, ${lead} ${verb} worth a look.`;
   } else {
-    opener = `${lead} is worth a look.`;
+    opener = `${lead} ${verb} worth a look.`;
   }
 
   const cards = packs.slice(0, 3).map(renderProjectCard);
