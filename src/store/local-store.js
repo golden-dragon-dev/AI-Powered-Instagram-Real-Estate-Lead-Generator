@@ -26,6 +26,7 @@ export class LocalStore {
     this.units = [];
     this.buyers = new Map();
     this.loaded = false;
+    this.source = "local";
   }
 
   async load() {

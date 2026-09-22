@@ -1,17 +1,19 @@
 # Airtable setup
 
-Matching does not read Airtable until `AIRTABLE_API_KEY` and `AIRTABLE_BASE_ID` are set. Tests use `data/seed`, so Milestone 1 can be checked without Airtable.
+Owner email for this project is `BusinessBotUAE77@gmail.com`. The base should sit under that account.
 
-Create one base with three tables. Field names must match exactly.
+Matching reads Airtable when `AIRTABLE_API_KEY` and `AIRTABLE_BASE_ID` are set. Field names must match exactly.
 
-## Table Developers
+## Tables
+
+### Developers
 
 | Field | Type | Notes |
 | --- | --- | --- |
 | Name | Single line text | Primary field |
 | Active | Checkbox | Off developers never match |
 
-## Table Projects
+### Projects
 
 | Field | Type | Notes |
 | --- | --- | --- |
@@ -32,7 +34,7 @@ Create one base with three tables. Field names must match exactly.
 | Last verified | Date | Required while Active |
 | Active | Checkbox | Off rows stay out of matching |
 
-## Table Units
+### Units
 
 | Field | Type | Notes |
 | --- | --- | --- |
@@ -51,10 +53,17 @@ Create one base with three tables. Field names must match exactly.
 
 - To add a developer, add a Developers row and keep Active on.
 - To add a project, add a Projects row, then add one Units row per bedroom type.
-- To change a price, edit Starting price AED on the unit. Do not edit code.
+- To change a price, edit Starting price AED on the unit. Matching picks it up with no code change.
 - To disable outdated data, uncheck Active on the project or unit.
 - Empty price, plan, handover, or availability is allowed. Replies must say it is not confirmed. Do not fill in a number. Do not pass the lead to an agent only because a field is empty.
 
-## Demo set
+## Connect the app
 
-Copy rows from `data/seed/developers.json`, `projects.json`, and `units.json`. Demo figures are for matching tests, not live sales.
+1. Create a free Airtable account with `BusinessBotUAE77@gmail.com`.
+2. Create a personal access token with data and schema access.
+3. Put the token and workspace id in `.env`.
+4. Run `npm run airtable:provision` to create Developers, Projects, and Units and load the sample rows.
+5. Open Share on the base and set that Gmail as owner.
+6. Run `npm run airtable:demo` to prove the Yas 3M match, a price edit, inactive hiding, and missing prices.
+
+Demo figures in `data/seed` are for tests, not live sales.

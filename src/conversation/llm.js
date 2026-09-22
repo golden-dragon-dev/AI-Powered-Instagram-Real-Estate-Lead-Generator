@@ -1,0 +1,82 @@
+/**
+ * Optional Anthropic Messages API polish.
+ * Never invents commercial facts: the engine fact-checks every polished string.
+ * Works without npm packages via fetch (Node 18+).
+ */
+
+const DEFAULT_MODEL = "claude-sonnet-4-20250514";
+
+export function createAnthropicClient(options = {}) {
+  const apiKey = options.apiKey || process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return null;
+  return {
+    apiKey,
+    model: options.model || process.env.ANTHROPIC_MODEL || DEFAULT_MODEL,
+    baseUrl: options.baseUrl || "https://api.anthropic.com"
+  };
+}
+
+export async function polishReplyWithModel(client, { buyer, packs, draftText, intents }) {
+  if (!client?.apiKey) return null;
+
+  const packSummary = packs.map((pack) => ({
+    name: pack.name.value,
+    developer: pack.developer.value,
+    area: pack.area.value,
+    bedrooms: pack.bedroomLabel.value,
+    startingPrice: pack.startingPriceText.confirmed ? pack.startingPriceText.value : null,
+    initialPayment: pack.downPaymentText.confirmed ? pack.downPaymentText.value : null,
+    paymentPlan: pack.paymentPlanSummary.confirmed ? pack.paymentPlanSummary.value : null,
+    handover: pack.handover.confirmed ? pack.handover.value : null,
+    availability: pack.availability.confirmed ? pack.availability.value : null
+  }));
+
+  const system = [
+    "You help with Abu Dhabi property enquiries.",
+    "Rewrite the draft reply in short natural English.",
+    "Use ONLY numbers, dates, plans, and availability from the provided fact packs.",
+    "If a field is null, say it is not confirmed yet. Never invent prices.",
+    "Do not add projects that are not in the fact packs.",
+    "Keep under 120 words."
+  ].join(" ");
+
+  const user = JSON.stringify({
+    intents,
+    buyer: {
+      budgetAed: buyer.budgetAed,
+      cashAvailableAed: buyer.cashAvailableAed,
+      areas: buyer.preferredAreas,
+      bedrooms: buyer.bedrooms,
+      financing: buyer.financing
+    },
+    factPacks: packSummary,
+    draftReply: draftText
+  });
+
+  try {
+    const response = await fetch(`${client.baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": client.apiKey,
+        "anthropic-version": "2023-06-01"
+      },
+      body: JSON.stringify({
+        model: client.model,
+        max_tokens: 400,
+        system,
+        messages: [{ role: "user", content: user }]
+      })
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    const text = (data.content || [])
+      .filter((block) => block.type === "text")
+      .map((block) => block.text)
+      .join("\n")
+      .trim();
+    return text || null;
+  } catch {
+    return null;
+  }
+}

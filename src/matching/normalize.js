@@ -65,14 +65,19 @@ export function bedroomLabel(bedrooms) {
 
 export function parseMoney(value) {
   if (value === null || value === undefined || value === "") return null;
-  if (typeof value === "number" && Number.isFinite(value)) return Math.round(value);
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value === 0 ? 0 : Math.round(value);
+  }
   let text = String(value).trim().toUpperCase().replace(/,/g, "");
   text = text.replace(/AED|DHS|DH|USD|\$/g, "").trim();
+  if (!text) return null;
   const million = text.match(/^(\d+(?:\.\d+)?)\s*M$/);
   if (million) return Math.round(Number(million[1]) * 1_000_000);
   const thousand = text.match(/^(\d+(?:\.\d+)?)\s*K$/);
   if (thousand) return Math.round(Number(thousand[1]) * 1_000);
-  const number = Number(text.replace(/[^\d.]/g, ""));
+  const digits = text.replace(/[^\d.]/g, "");
+  if (!digits) return null;
+  const number = Number(digits);
   if (!Number.isFinite(number)) return null;
   return Math.round(number);
 }

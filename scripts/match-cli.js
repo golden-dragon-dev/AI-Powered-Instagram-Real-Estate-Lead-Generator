@@ -1,6 +1,9 @@
+import { loadEnv } from "./load-env.js";
 import { parseMoney, normalizeArea, normalizeBedrooms, normalizePropertyType } from "../src/matching/normalize.js";
-import { createLocalStore } from "../src/store/local-store.js";
+import { createCatalogStore } from "../src/store/create-store.js";
 import { PropertyService } from "../src/services/property-service.js";
+
+loadEnv();
 
 function arg(name) {
   const index = process.argv.indexOf(`--${name}`);
@@ -8,7 +11,7 @@ function arg(name) {
   return process.argv[index + 1];
 }
 
-const store = await createLocalStore();
+const store = await createCatalogStore();
 const service = new PropertyService(store);
 const result = service.answer({
   emirate: "Abu Dhabi",
@@ -22,6 +25,7 @@ const result = service.answer({
 });
 
 console.log(JSON.stringify({
+  source: store.source || "local",
   matchCount: result.matchCount,
   matches: result.matches.map((row) => ({
     project: row.project.name,

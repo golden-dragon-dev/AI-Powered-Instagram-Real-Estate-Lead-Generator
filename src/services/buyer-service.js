@@ -27,17 +27,21 @@ export function mergeBuyer(existing, patch) {
     next[key] = value;
   }
   if (hasValue(patch.preferredAreas)) {
-    next.preferredAreas = uniqueStrings([...(base.preferredAreas || []), ...patch.preferredAreas]);
+    // Latest explicit area replaces earlier area (buyer corrections).
+    next.preferredAreas = uniqueStrings(patch.preferredAreas);
   }
   if (hasValue(patch.propertyTypes)) {
-    next.propertyTypes = uniqueStrings([...(base.propertyTypes || []), ...patch.propertyTypes]);
+    next.propertyTypes = uniqueStrings(patch.propertyTypes);
   }
   if (hasValue(patch.bedrooms)) {
-    next.bedrooms = uniqueNumbers([...(base.bedrooms || []), ...patch.bedrooms]);
+    // Latest bedroom requirement replaces earlier bedroom counts.
+    next.bedrooms = uniqueNumbers(patch.bedrooms);
   }
   if (hasValue(patch.intentSignals)) {
     next.intentSignals = uniqueStrings([...(base.intentSignals || []), ...patch.intentSignals]);
   }
+  if (patch.contactDeclined === true) next.contactDeclined = true;
+  if (patch.contactDeclined === false) next.contactDeclined = false;
   const timestamp = nowIso();
   if (!next.createdAt) next.createdAt = timestamp;
   next.updatedAt = timestamp;
@@ -73,6 +77,11 @@ export function buyerFromKnownFacts(instagramUserId, facts = {}) {
   if (facts.timeframe) patch.timeframe = facts.timeframe;
   if (facts.name) patch.name = facts.name;
   if (facts.phone) patch.phone = facts.phone;
+  if (facts.contactDeclined === true) patch.contactDeclined = true;
+  if (facts.intentSignals) patch.intentSignals = facts.intentSignals;
+  if (facts.conversationSummary) patch.conversationSummary = facts.conversationSummary;
+  if (facts.leadStatus) patch.leadStatus = facts.leadStatus;
+  if (facts.followUpStatus) patch.followUpStatus = facts.followUpStatus;
   return patch;
 }
 
@@ -88,10 +97,23 @@ export class BuyerService {
     return this.store.saveBuyer(created);
   }
 
-  async remember(instagramUserId, facts) {
+  async remember(instagramUserId, facts = {}) {
     const existing = await this.getOrCreate(instagramUserId);
     const patch = buyerFromKnownFacts(instagramUserId, facts);
     const merged = mergeBuyer(existing, patch);
+    return this.store.saveBuyer(merged);
+  }
+
+  async updateMeta(instagramUserId, meta = {}) {
+    const existing = await this.getOrCreate(instagramUserId);
+    const merged = mergeBuyer(existing, {
+      instagramUserId,
+      conversationSummary: meta.conversationSummary,
+      leadStatus: meta.leadStatus,
+      followUpStatus: meta.followUpStatus,
+      intentSignals: meta.intentSignals,
+      ...(meta.contactDeclined !== undefined ? { contactDeclined: meta.contactDeclined } : {})
+    });
     return this.store.saveBuyer(merged);
   }
 

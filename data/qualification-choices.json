@@ -1,0 +1,51 @@
+{
+  "useType": {
+    "field": "useType",
+    "prompt": "Are you looking to buy, invest, or just exploring?",
+    "choices": [
+      { "id": "buy", "label": "Buy", "aliases": ["buy", "buying", "purchase", "end use", "live in"], "value": "end_use" },
+      { "id": "invest", "label": "Invest", "aliases": ["invest", "investment", "investor", "rental"], "value": "investment" },
+      { "id": "explore", "label": "Just exploring", "aliases": ["just exploring", "exploring", "browse", "looking around"], "value": "unknown" }
+    ]
+  },
+  "propertyTypes": {
+    "field": "propertyTypes",
+    "prompt": "Which property type fits best?",
+    "choices": [
+      { "id": "apartment", "label": "Apartment", "aliases": ["apartment", "apartments", "flat", "flats", "apt"], "value": "apartment" },
+      { "id": "villa", "label": "Villa", "aliases": ["villa", "villas"], "value": "villa" },
+      { "id": "townhouse", "label": "Townhouse", "aliases": ["townhouse", "townhouses", "th"], "value": "townhouse" }
+    ]
+  },
+  "financing": {
+    "field": "financing",
+    "prompt": "How do you want to pay?",
+    "choices": [
+      { "id": "cash", "label": "Cash", "aliases": ["cash", "all cash", "full cash", "cash buyer"], "value": "cash" },
+      { "id": "mortgage", "label": "Mortgage", "aliases": ["mortgage", "bank finance", "bank loan"], "value": "mortgage" },
+      { "id": "payment_plan", "label": "Payment plan", "aliases": ["payment plan", "instalment", "installment", "plan"], "value": "payment_plan" }
+    ]
+  },
+  "preferredAreas": {
+    "field": "preferredAreas",
+    "prompt": "Which area are you looking at?",
+    "choices": [
+      { "id": "yas", "label": "Yas", "aliases": ["yas", "yas island"], "value": "Yas Island" },
+      { "id": "saadiyat", "label": "Saadiyat", "aliases": ["saadiyat", "saadiyat island"], "value": "Saadiyat Island" },
+      { "id": "reem", "label": "Reem", "aliases": ["reem", "al reem", "reem island", "al reem island"], "value": "Al Reem Island" },
+      { "id": "hudayriyat", "label": "Hudayriyat", "aliases": ["hudayriyat", "hudayriyat island", "al hudayriyat"], "value": "Hudayriyat Island" },
+      { "id": "other", "label": "Other", "aliases": ["other", "somewhere else"], "value": null }
+    ]
+  },
+  "bedrooms": {
+    "field": "bedrooms",
+    "prompt": "How many bedrooms?",
+    "choices": [
+      { "id": "studio", "label": "Studio", "aliases": ["studio", "studios"], "value": 0 },
+      { "id": "1", "label": "1 bedroom", "aliases": ["1", "1br", "1 bedroom", "one bedroom"], "value": 1 },
+      { "id": "2", "label": "2 bedrooms", "aliases": ["2", "2br", "2 bedroom", "2 bedrooms", "two bedroom", "two bedrooms"], "value": 2 },
+      { "id": "3", "label": "3 bedrooms", "aliases": ["3", "3br", "3 bedroom", "3 bedrooms", "three bedroom", "three bedrooms"], "value": 3 },
+      { "id": "4", "label": "4+ bedrooms", "aliases": ["4", "4br", "4 bedroom", "4 bedrooms", "four bedroom"], "value": 4 }
+    ]
+  }
+}

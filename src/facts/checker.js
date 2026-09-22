@@ -4,11 +4,14 @@ const MONTHS = "jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|january|february
 
 function normalizeAmount(raw) {
   const text = String(raw).toUpperCase().replace(/,/g, "").replace(/AED|DHS|DH/g, "").trim();
+  if (!text) return null;
   const million = text.match(/^(\d+(?:\.\d+)?)\s*M$/);
   if (million) return Math.round(Number(million[1]) * 1_000_000);
   const thousand = text.match(/^(\d+(?:\.\d+)?)\s*K$/);
   if (thousand) return Math.round(Number(thousand[1]) * 1_000);
-  const number = Number(text.replace(/[^\d.]/g, ""));
+  const digits = text.replace(/[^\d.]/g, "");
+  if (!digits) return null;
+  const number = Number(digits);
   return Number.isFinite(number) ? Math.round(number) : null;
 }
 
@@ -80,6 +83,11 @@ function claimAllowed(claim, allowed) {
 
 export function validateMessage(message, packs, options = {}) {
   const allowed = collectAllowedClaims(packs);
+  for (const amount of options.allowedBuyerAmounts || []) {
+    if (amount !== null && amount !== undefined && Number.isFinite(Number(amount))) {
+      allowed.amounts.add(Math.round(Number(amount)));
+    }
+  }
   const claims = extractCommercialClaims(message);
   const violations = claims.filter((claim) => !claimAllowed(claim, allowed));
   const missing = packs.flatMap(missingCommercialFields);

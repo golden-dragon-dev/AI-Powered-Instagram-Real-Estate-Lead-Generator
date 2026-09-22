@@ -65,6 +65,7 @@ export const BUYER_FIELDS = [
   "conversationSummary",
   "leadStatus",
   "followUpStatus",
+  "contactDeclined",
   "createdAt",
   "updatedAt",
   "lastSeenAt"
@@ -90,6 +91,7 @@ export function emptyBuyer(instagramUserId) {
     conversationSummary: null,
     leadStatus: "new",
     followUpStatus: "none",
+    contactDeclined: false,
     createdAt: null,
     updatedAt: null,
     lastSeenAt: null

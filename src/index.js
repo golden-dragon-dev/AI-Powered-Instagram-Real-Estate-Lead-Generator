@@ -1,5 +1,7 @@
 export { createLocalStore, LocalStore } from "./store/local-store.js";
-export { AirtableStore } from "./store/airtable-store.js";
+export { AirtableStore, createAirtableStore } from "./store/airtable-store.js";
+export { createCatalogStore, createSeededAirtableStore, loadSeed } from "./store/create-store.js";
+export { OWNER_EMAIL, BASE_NAME, YAS_MATCH_CRITERIA } from "./store/airtable-schema.js";
 export { BuyerService, mergeBuyer, buyerFromKnownFacts } from "./services/buyer-service.js";
 export { PropertyService } from "./services/property-service.js";
 export { matchInventory, matchCriteria, criteriaFromBuyer } from "./matching/matcher.js";
@@ -14,3 +16,21 @@ export {
   normalizeBedrooms,
   normalizePropertyType
 } from "./matching/normalize.js";
+export { extractFactsFromMessage, detectIntents } from "./conversation/extract.js";
+export {
+  qualificationGaps,
+  nextQualificationQuestion,
+  isCoreQualified,
+  summarizeBuyer
+} from "./conversation/qualify.js";
+export { ConversationMemory } from "./conversation/memory.js";
+export { ConversationEngine, createConversationEngine } from "./conversation/engine.js";
+export { createAnthropicClient, polishReplyWithModel } from "./conversation/llm.js";
+export { buildConversationReply } from "./conversation/replies.js";
+export {
+  loadQualificationChoices,
+  resolveChoice,
+  choicesForField,
+  applyChoiceFacts
+} from "./conversation/choices.js";
+export { answerFactQuestion, detectFactTopic } from "./conversation/fact-answers.js";

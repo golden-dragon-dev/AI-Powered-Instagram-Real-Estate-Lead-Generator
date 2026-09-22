@@ -1,0 +1,162 @@
+:root {
+  --bg: #f3efe6;
+  --ink: #1c2430;
+  --muted: #5d6b7c;
+  --card: #fffdf8;
+  --line: #d7d0c3;
+  --accent: #0f6e56;
+  --bot: #e7f2ee;
+  --you: #fff;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at top left, #efe4c8 0, transparent 40%),
+    linear-gradient(180deg, #f7f1e6, #ebe4d8);
+  min-height: 100vh;
+}
+
+.app {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 24px 16px 40px;
+  display: grid;
+  gap: 16px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: end;
+}
+
+.eyebrow {
+  margin: 0 0 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+h1 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.15;
+}
+
+.sub { margin: 8px 0 0; color: var(--muted); }
+
+.meta {
+  display: grid;
+  gap: 8px;
+  min-width: 220px;
+}
+
+label {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+input, button {
+  font: inherit;
+}
+
+input {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--card);
+}
+
+button {
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 16px;
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+}
+
+button.ghost {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+
+.thread {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  min-height: 420px;
+  max-height: 55vh;
+  overflow: auto;
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.bubble {
+  max-width: 85%;
+  padding: 12px 14px;
+  border-radius: 16px;
+  white-space: pre-wrap;
+  line-height: 1.45;
+}
+
+.bubble.bot {
+  background: var(--bot);
+  justify-self: start;
+}
+
+.bubble.you {
+  background: var(--you);
+  border: 1px solid var(--line);
+  justify-self: end;
+}
+
+.meta-line {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.choices button {
+  background: var(--card);
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
+.composer {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.buyer-panel {
+  background: #111827;
+  color: #e5e7eb;
+  border-radius: 12px;
+  padding: 12px;
+  overflow: auto;
+  font-size: 12px;
+}
+
+@media (max-width: 640px) {
+  h1 { font-size: 22px; }
+  .thread { min-height: 340px; }
+}

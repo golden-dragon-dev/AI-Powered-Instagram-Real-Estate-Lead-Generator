@@ -1,16 +1,24 @@
 {
   "name": "abu-dhabi-property-leads",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
-  "description": "Abu Dhabi Instagram property lead system. Milestone 1: listing database, buyer records, matching, confirmed-data replies.",
+  "description": "Abu Dhabi Instagram property lead system. Milestone 2: conversation, qualification, buyer memory, fact-checked replies.",
   "engines": {
     "node": ">=18"
   },
   "scripts": {
-    "test": "node --test --test-reporter=spec test/step1-schema.test.js test/step2-buyer-model.test.js test/step3-matching.test.js test/step4-fact-retrieval.test.js test/step5-fact-checker.test.js test/step6-acceptance.test.js",
+    "test": "node --test --test-reporter=spec test/step1-schema.test.js test/step2-buyer-model.test.js test/step3-matching.test.js test/step4-fact-retrieval.test.js test/step5-fact-checker.test.js test/step6-acceptance.test.js test/step7-airtable-adapter.test.js test/step8-extract.test.js test/step9-qualification.test.js test/step10-memory-context.test.js test/step11-anti-hallucination.test.js test/step12-client-scenarios.test.js",
     "verify": "node scripts/verify-milestone1.js",
+    "verify:m1": "node scripts/verify-milestone1.js",
+    "verify:m2": "node scripts/verify-milestone2.js",
     "match": "node scripts/match-cli.js",
-    "import-seed": "node scripts/import-seed.js"
+    "chat": "node scripts/chat-cli.js",
+    "chat:web": "node scripts/chat-web.js",
+    "start": "node scripts/chat-web.js",
+    "import-seed": "node scripts/import-seed.js",
+    "airtable:demo": "node scripts/airtable-demo.js",
+    "airtable:provision": "node scripts/provision-airtable.js",
+    "airtable:seed": "node scripts/seed-existing-airtable.js"
   }
 }

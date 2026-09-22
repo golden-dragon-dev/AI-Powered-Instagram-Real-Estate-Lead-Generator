@@ -158,6 +158,24 @@ npm run match -- --area "Yas" --type studio
 
 Expected: `Yas Studio One` only. `Yas Park Views` must be absent.
 
+## Step 9. Airtable records
+
+```bash
+npm run airtable:demo
+node --test test/step7-airtable-adapter.test.js
+```
+
+Expected:
+
+- Developers, Projects, and Units are loaded as Airtable records
+- AED 3M / 500k / Yas / 3BR / payment plan returns Yas Park Views at AED 2,600,000
+- Raising that unit to AED 3,500,000 in Airtable drops it from the match
+- Restoring AED 2,600,000 brings it back
+- Old Yas Towers stays hidden
+- Yas Waterfront Residences has no price and the reply says not confirmed yet
+
+Live Airtable needs `AIRTABLE_API_KEY` and `AIRTABLE_BASE_ID`. Owner email is `BusinessBotUAE77@gmail.com`.
+
 ## Airtable mapping
 
 Matching reads this shape from JSON or Airtable:
@@ -175,4 +193,6 @@ See `docs/AIRTABLE_SETUP.md` to recreate the base. Do not hardcode prices. Chang
 - The Yas 3M query returns one confirmed project
 - Invented prices are blocked
 - Missing fields say not confirmed yet
-- Missing fields do not hand off
+- `npm run airtable:demo` passes
+- Changing a unit price changes the match
+- Inactive projects stay hidden

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Abu Dhabi listing test chat</title>
+  <link rel="stylesheet" href="/chat.css" />
+</head>
+<body>
+  <main class="app">
+    <header class="header">
+      <div>
+        <p class="eyebrow">Milestone 2 test chat</p>
+        <h1>Abu Dhabi listing assistant</h1>
+        <p class="sub">Uses your Airtable facts when keys are set. Replies are fact-checked before send.</p>
+      </div>
+      <div class="meta">
+        <label>
+          Test buyer id
+          <input id="userId" value="ig_web_demo" />
+        </label>
+        <button type="button" id="buyerBtn" class="ghost">Show saved buyer</button>
+      </div>
+    </header>
+
+    <section id="thread" class="thread" aria-live="polite"></section>
+
+    <section id="choices" class="choices" hidden></section>
+
+    <form id="form" class="composer">
+      <input id="message" autocomplete="off" placeholder="Type a buyer message or tap a choice" />
+      <button type="submit">Send</button>
+    </form>
+
+    <pre id="buyerPanel" class="buyer-panel" hidden></pre>
+  </main>
+  <script src="/chat.js"></script>
+</body>
+</html>
