@@ -70,5 +70,5 @@ test("step 5f empty match list still does not handoff", async () => {
   });
   assert.equal(answer.matchCount, 0);
   assert.equal(answer.reply.handoffRequired, false);
-  assert.match(answer.reply.text, /do not have a confirmed match/i);
+  assert.match(answer.reply.text, /do not have a confirmed (match|option)/i);
 });

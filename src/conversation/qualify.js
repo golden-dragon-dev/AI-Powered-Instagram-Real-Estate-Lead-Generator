@@ -12,14 +12,14 @@ const FIELD_LABELS = {
 };
 
 const ASK_PROMPTS = {
-  budgetAed: "What budget are you working with in AED?",
-  preferredAreas: "Which Abu Dhabi area are you looking at?",
-  propertyTypes: "What type and size do you want?",
-  cashAvailableAed: "How much cash can you put toward the initial payment now?",
-  financing: "How do you want to pay?",
-  useType: "Are you looking to buy, invest, or just exploring?",
-  name: "What name should I use for your enquiry?",
-  phone: "What phone number can an advisor reach you on?"
+  budgetAed: "What budget are you working with?",
+  preferredAreas: "Which area are you leaning toward?",
+  propertyTypes: "What size works best for you?",
+  cashAvailableAed: "How much cash can you put in for the initial payment?",
+  financing: "Do you prefer cash, mortgage, or a payment plan?",
+  useType: "Are you buying, investing, or just exploring?",
+  name: "What name should I put on the enquiry?",
+  phone: "If you want an advisor to follow up, what number works best?"
 };
 
 /** Core fields needed before we run a confident inventory match. */

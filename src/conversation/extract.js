@@ -137,6 +137,9 @@ export function detectIntents(message) {
     intents.push("agent");
     intents.push("high_intent");
   }
+  if (/\b(yes|yeah|yep|yup|sure|ok|okay|sounds good|go ahead)\b/i.test(text) && text.length < 40) {
+    intents.push("affirm");
+  }
   if (
     /\b(don'?t want to (give|share)|prefer not|no phone|without (my )?phone|skip (the )?phone|won'?t give|not giving (my )?phone|keep browsing|no contact)\b/i.test(
       text
@@ -158,34 +161,33 @@ export function detectIntents(message) {
 const MONEY_TOKEN = "(\\d[\\d,]*(?:\\.\\d+)?\\s*[MmKk]?)";
 
 function extractBudget(text) {
-  // Prefer cash phrasing when the amount is clearly cash-in-hand, so 500k available now is not budget.
-  if (/\b\d[\d,]*(?:\.\d+)?\s*[Kk]\b.*\b(available now|ready now|cash)\b/i.test(text) && !/\bbudget\b/i.test(text)) {
-    // fall through; cash extractor handles it
-  } else {
-    const patterns = [
-      new RegExp(
-        `(?:budget(?:\\s+is|\\s+of)?|up to|around|about|max(?:imum)?)\\s*(?:of\\s*)?(?:AED|Dhs|Dh)?\\s*${MONEY_TOKEN}`,
-        "i"
-      ),
-      new RegExp(`(?:AED|Dhs|Dh)\\s*${MONEY_TOKEN}\\s*(?:budget|total)?`, "i"),
-      new RegExp(`\\b(\\d[\\d,]*(?:\\.\\d+)?\\s*[Mm])\\b(?:\\s*(?:budget|total))?`, "i")
-    ];
-    for (const pattern of patterns) {
-      const match = text.match(pattern);
-      if (!match) continue;
-      const raw = match[1];
-      if (/budget|up to|around|about|max/i.test(match[0]) || /[Mm]\b/.test(raw)) {
-        const amount = parseMoney(raw);
-        if (amount !== null && amount >= 200_000) return amount;
-      }
+  const patterns = [
+    new RegExp(
+      `(?:budget(?:\\s+is|\\s+of)?|up to|around|about|max(?:imum)?)\\s*(?:of\\s*)?(?:AED|Dhs|Dh)?\\s*${MONEY_TOKEN}`,
+      "i"
+    ),
+    new RegExp(`(?:AED|Dhs|Dh)\\s*${MONEY_TOKEN}\\s*(?:budget|total)?`, "i"),
+    new RegExp(`\\b(\\d[\\d,]*(?:\\.\\d+)?\\s*[Mm])\\b(?:\\s*(?:budget|total))?`, "i")
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (!match) continue;
+    const raw = match[1];
+    // Do not treat a clear cash-in-hand thousand amount as budget.
+    if (/[Kk]\b/.test(raw) && /\b(cash|available now|ready now|down)\b/i.test(text) && !/\bbudget\b/i.test(match[0])) {
+      continue;
     }
-    const have = text.match(
-      new RegExp(`\\b(?:i\\s+have|with)\\s+(?:AED|Dhs|Dh)?\\s*(\\d[\\d,]*(?:\\.\\d+)?\\s*[Mm])`, "i")
-    );
-    if (have) {
-      const amount = parseMoney(have[1]);
-      if (amount !== null) return amount;
+    if (/budget|up to|around|about|max/i.test(match[0]) || /[Mm]\b/.test(raw) || /AED|Dhs|Dh/i.test(match[0])) {
+      const amount = parseMoney(raw);
+      if (amount !== null && amount >= 200_000) return amount;
     }
+  }
+  const have = text.match(
+    new RegExp(`\\b(?:i\\s+have|with)\\s+(?:AED|Dhs|Dh)?\\s*(\\d[\\d,]*(?:\\.\\d+)?\\s*[Mm])`, "i")
+  );
+  if (have) {
+    const amount = parseMoney(have[1]);
+    if (amount !== null) return amount;
   }
   return null;
 }

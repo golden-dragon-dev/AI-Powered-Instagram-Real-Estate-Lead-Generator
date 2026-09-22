@@ -8,7 +8,7 @@ function line(label, packField, fallback) {
 export function renderSafeReply(packs) {
   if (!packs.length) {
     return {
-      text: "I do not have a confirmed match in the current approved list for those filters. I can widen area or bedrooms if you want.",
+      text: "I do not have a confirmed option that fits those details yet. I can look at nearby sizes or another area if you want.",
       handoffRequired: false
     };
   }
@@ -29,6 +29,15 @@ export function renderSafeReply(packs) {
       line("Handover", pack.handover, "not confirmed yet"),
       line("Availability", pack.availability, "not confirmed yet")
     ];
+    if (pack.sizeSqftFrom.confirmed) {
+      rows.splice(
+        4,
+        0,
+        pack.sizeSqftTo.confirmed
+          ? `Size: ${pack.sizeSqftFrom.value} to ${pack.sizeSqftTo.value} sqft`
+          : `Size: from ${pack.sizeSqftFrom.value} sqft`
+      );
+    }
     if (missing.length) {
       rows.push("I can keep helping with what is confirmed. Missing figures are not estimated.");
     }
@@ -36,7 +45,7 @@ export function renderSafeReply(packs) {
   });
 
   return {
-    text: `Confirmed from the approved list:\n\n${blocks.join("\n\n")}`,
+    text: blocks.join("\n\n"),
     handoffRequired: false
   };
 }

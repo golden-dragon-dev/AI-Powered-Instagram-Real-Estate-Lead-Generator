@@ -1,10 +1,12 @@
 import { missingDataHandoff, validateMessage } from "../facts/checker.js";
-import { criteriaFromBuyer } from "../matching/matcher.js";
 import { extractFactsFromMessage } from "./extract.js";
 import { ConversationMemory } from "./memory.js";
-import { isCoreQualified, summarizeBuyer } from "./qualify.js";
+import { canPitchBuyer, resolveMatches } from "./match-resolve.js";
+import { summarizeBuyer, isCoreQualified } from "./qualify.js";
 import { buildConversationReply, fallbackSafeText } from "./replies.js";
 import { polishReplyWithModel } from "./llm.js";
+import { isAffirmation, resolveAffirmation } from "./affirmation.js";
+import { retrieveFacts } from "../facts/retrieval.js";
 
 function hasHighIntent(intents, buyer) {
   if (intents.includes("high_intent")) return true;
@@ -17,14 +19,14 @@ function hasHighIntent(intents, buyer) {
 function leadStatusFor(buyer, intents, matchCount) {
   if (hasHighIntent(intents, buyer)) return "high_intent";
   if (matchCount > 0 && isCoreQualified(buyer)) return "qualified";
-  if (isCoreQualified(buyer)) return "qualifying";
+  if (canPitchBuyer(buyer)) return "engaged";
   if (buyer.budgetAed || buyer.preferredAreas?.length) return "engaged";
   return buyer.leadStatus || "new";
 }
 
 /**
  * Test-environment conversation engine.
- * Uses buyer memory + inventory matching + fact check. Optional model polish never bypasses the checker.
+ * Matching stays in code. Soft preferences only rank confirmed projects.
  */
 export class ConversationEngine {
   constructor({ buyers, properties, memory, llm = null } = {}) {
@@ -37,31 +39,55 @@ export class ConversationEngine {
 
   async handleMessage(instagramUserId, message, options = {}) {
     const text = String(message || "").trim();
-    const { facts, signals, intents } = extractFactsFromMessage(text);
+    let { facts, signals, intents } = extractFactsFromMessage(text);
+
+    const pendingOffer = this.memory.getPendingOffer(instagramUserId);
+    if (isAffirmation(text) && pendingOffer) {
+      const resolved = resolveAffirmation(pendingOffer, text);
+      if (resolved?.facts) facts = { ...facts, ...resolved.facts };
+      if (resolved?.clearPending) this.memory.setPendingOffer(instagramUserId, null);
+      if (!intents.includes("affirm")) intents = [...intents, "affirm"];
+    }
+
+    // "Show both" from bedroom chips
+    if (/^both$/i.test(text) && pendingOffer?.type === "bedroom_choice") {
+      this.memory.setPendingOffer(instagramUserId, null);
+    }
 
     let buyer = await this.buyers.remember(instagramUserId, facts);
+    if (facts.bedrooms !== undefined || facts.project || facts.area) {
+      // Concrete choice made; drop stale pending offer
+      if (facts.bedrooms !== undefined || facts.project) {
+        this.memory.setPendingOffer(instagramUserId, null);
+      }
+    }
     this.memory.addTurn(instagramUserId, { role: "user", text, intents, signals });
 
     const handoffRequested = intents.includes("agent") || Boolean(options.handoffRequested);
     const highIntent = hasHighIntent(intents, buyer);
 
-    let packs = [];
-    let matchResult = { matchCount: 0, matches: [], criteria: criteriaFromBuyer(buyer) };
-
-    if (isCoreQualified(buyer) || buyer.projectInterest) {
-      matchResult = this.properties.matchBuyer(buyer);
-      packs = this.properties.factsFor(matchResult);
-    }
+    const catalog = this.properties.catalog();
+    const matchResult = resolveMatches(catalog, buyer);
+    const packs = retrieveFacts(matchResult.matches);
 
     let draft = buildConversationReply({
       buyer,
       message: text,
       intents,
       packs,
-      matchCount: matchResult.matchCount,
+      matches: matchResult.matches,
+      matchMode: matchResult.mode,
       highIntent,
-      handoffRequested
+      handoffRequested,
+      pendingOffer: this.memory.getPendingOffer(instagramUserId)
     });
+
+    if (draft.pendingOffer) {
+      this.memory.setPendingOffer(instagramUserId, draft.pendingOffer);
+    } else if (draft.stage === "matched" || draft.stage === "soft_match") {
+      // keep pending if follow-up set it; otherwise clear stale offers when fully answered
+      if (!draft.nextQuestion) this.memory.setPendingOffer(instagramUserId, null);
+    }
 
     if (this.llm && options.useLlm !== false && packs.length) {
       const polished = await polishReplyWithModel(this.llm, {
@@ -87,7 +113,7 @@ export class ConversationEngine {
     if (!check.ok) {
       replyText = packs.length
         ? fallbackSafeText(packs)
-        : "I can only share confirmed listing details. Ask me about budget, area, or bedrooms and I will check the approved list.";
+        : "I can only share confirmed listing details. Tell me a budget and area and I will check what we have.";
       check = validateMessage(replyText, packs, {
         handoffRequested,
         handoffReason: handoffRequested ? "buyer_requested" : null,
@@ -117,7 +143,8 @@ export class ConversationEngine {
       text: replyText,
       stage: draft.stage,
       matchCount: matchResult.matchCount,
-      factCheckOk: check.ok
+      factCheckOk: check.ok,
+      pendingOffer: this.memory.getPendingOffer(instagramUserId)
     });
 
     return {
@@ -128,12 +155,14 @@ export class ConversationEngine {
       signals,
       criteria: matchResult.criteria,
       matchCount: matchResult.matchCount,
+      matchMode: matchResult.mode,
       matches: matchResult.matches,
       packs,
       check,
       missingData: missingDataHandoff(packs),
       handoffRequired: check.handoffRequired,
       nextQuestion: draft.nextQuestion || null,
+      pendingOffer: this.memory.getPendingOffer(instagramUserId),
       context: this.memory.recentContext(instagramUserId)
     };
   }

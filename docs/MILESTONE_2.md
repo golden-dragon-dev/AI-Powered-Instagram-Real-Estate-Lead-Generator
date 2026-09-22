@@ -49,13 +49,17 @@ npm run verify:m2
 8. Reload or return with the same buyer id (memory kept)
 9. `I don't want to give my phone number.` (keeps helping, no repeat phone ask)
 
-## Quick replies
+## Project-led chat
 
-Choices are edited in one place:
+Once budget and area are known, the chat introduces confirmed projects early and keeps qualifying around them.
+
+Edit soft project emphasis without code changes:
 
 ```text
-data/qualification-choices.json
+data/conversation-preferences.json
 ```
+
+Set `featuredProjectIds` or `featuredProjectNames` for the launch you want to lean toward.
 
 Examples already included:
 

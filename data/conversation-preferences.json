@@ -1,0 +1,7 @@
+{
+  "maxProjectsToPitch": 2,
+  "maxUnitsPerProject": 3,
+  "featuredProjectIds": ["prj_yas_park_views"],
+  "featuredProjectNames": ["Yas Park Views"],
+  "emphasisNotes": "Edit featuredProjectIds or featuredProjectNames to lean the chat toward a launch without changing conversation code."
+}

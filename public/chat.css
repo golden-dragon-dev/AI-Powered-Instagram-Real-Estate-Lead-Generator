@@ -292,9 +292,12 @@ body {
 
 .choices {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
-  padding: 4px 14px 10px;
+  padding: 8px 14px 12px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
 }
 
 .choices[hidden] {
@@ -304,12 +307,22 @@ body {
 .choices button {
   border: 1px solid rgba(24, 78, 91, 0.28);
   border-radius: 8px;
-  padding: 8px 11px;
+  padding: 11px 14px;
   background: #fff;
   color: var(--accent);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
+  white-space: nowrap;
+  flex: 0 0 auto;
+  min-height: 44px;
   transition: background 160ms ease, transform 160ms ease;
+}
+
+@media (min-width: 480px) {
+  .choices {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
 }
 
 .choices button:hover {

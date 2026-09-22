@@ -34,3 +34,11 @@ export {
   applyChoiceFacts
 } from "./conversation/choices.js";
 export { answerFactQuestion, detectFactTopic } from "./conversation/fact-answers.js";
+export {
+  loadConversationPreferences,
+  rankMatches,
+  limitMatchesForPitch
+} from "./conversation/preferences.js";
+export { resolveMatches, canPitchBuyer } from "./conversation/match-resolve.js";
+export { isAffirmation, resolveAffirmation } from "./conversation/affirmation.js";
+export { renderProjectIntro, renderProjectCard } from "./conversation/project-copy.js";

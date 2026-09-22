@@ -5,6 +5,7 @@
 export class ConversationMemory {
   constructor() {
     this.turns = new Map();
+    this.pending = new Map();
   }
 
   getTurns(instagramUserId) {
@@ -18,17 +19,31 @@ export class ConversationMemory {
       ...turn,
       at: turn.at || new Date().toISOString()
     });
-    // Keep recent context only
     this.turns.set(id, list.slice(-40));
     return this.getTurns(id);
   }
 
   clear(instagramUserId) {
     this.turns.delete(String(instagramUserId));
+    this.pending.delete(String(instagramUserId));
   }
 
   recentContext(instagramUserId, limit = 8) {
     return this.getTurns(instagramUserId).slice(-limit);
+  }
+
+  getPendingOffer(instagramUserId) {
+    return this.pending.get(String(instagramUserId)) || null;
+  }
+
+  setPendingOffer(instagramUserId, offer) {
+    const id = String(instagramUserId);
+    if (!offer) {
+      this.pending.delete(id);
+      return null;
+    }
+    this.pending.set(id, offer);
+    return offer;
   }
 
   buildSummary(instagramUserId, buyer) {
