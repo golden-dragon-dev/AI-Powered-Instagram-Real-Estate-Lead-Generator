@@ -39,7 +39,8 @@ function sendJson(res, status, body) {
 function sendText(res, status, text, type = "text/plain; charset=utf-8") {
   res.writeHead(status, {
     "content-type": type,
-    "access-control-allow-origin": "*"
+    "access-control-allow-origin": "*",
+    "cache-control": "no-store"
   });
   res.end(text);
 }

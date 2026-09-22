@@ -3,37 +3,66 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Abu Dhabi listing test chat</title>
+  <title>Property desk · test chat</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/chat.css" />
 </head>
 <body>
-  <main class="app">
-    <header class="header">
-      <div>
-        <p class="eyebrow">Milestone 2 test chat</p>
-        <h1>Abu Dhabi listing assistant</h1>
-        <p class="sub">Uses your Airtable facts when keys are set. Replies are fact-checked before send.</p>
-      </div>
-      <div class="meta">
+  <div class="page">
+    <aside class="aside">
+      <p class="brand">Harbour Desk</p>
+      <h1>Instagram enquiry test</h1>
+      <p class="lede">
+        Same flow a buyer would use in DMs. Replies come from your Airtable list only.
+      </p>
+      <dl class="hints">
+        <div>
+          <dt>Tip</dt>
+          <dd>Keep one buyer id while you walk through the scenarios.</dd>
+        </div>
+        <div>
+          <dt>Choices</dt>
+          <dd>Tap a reply chip or type freely. Both save the same value.</dd>
+        </div>
+      </dl>
+    </aside>
+
+    <main class="phone" aria-label="Test Instagram chat">
+      <header class="topbar">
+        <div class="identity">
+          <span class="avatar" aria-hidden="true">HD</span>
+          <div>
+            <strong>Harbour Desk</strong>
+            <span>Abu Dhabi listings · test</span>
+          </div>
+        </div>
+        <button type="button" id="settingsToggle" class="icon-btn" aria-expanded="false" aria-controls="settings">
+          Settings
+        </button>
+      </header>
+
+      <div id="settings" class="settings" hidden>
         <label>
-          Test buyer id
-          <input id="userId" value="ig_web_demo" />
+          Buyer id
+          <input id="userId" value="ig_web_demo" spellcheck="false" />
         </label>
-        <button type="button" id="buyerBtn" class="ghost">Show saved buyer</button>
+        <button type="button" id="buyerBtn">Show saved buyer card</button>
       </div>
-    </header>
 
-    <section id="thread" class="thread" aria-live="polite"></section>
+      <section id="thread" class="thread" aria-live="polite"></section>
 
-    <section id="choices" class="choices" hidden></section>
+      <section id="choices" class="choices" hidden></section>
 
-    <form id="form" class="composer">
-      <input id="message" autocomplete="off" placeholder="Type a buyer message or tap a choice" />
-      <button type="submit">Send</button>
-    </form>
+      <form id="form" class="composer">
+        <input id="message" autocomplete="off" placeholder="Message…" />
+        <button type="submit" aria-label="Send">Send</button>
+      </form>
+    </main>
+  </div>
 
-    <pre id="buyerPanel" class="buyer-panel" hidden></pre>
-  </main>
+  <pre id="buyerPanel" class="buyer-panel" hidden></pre>
   <script src="/chat.js"></script>
 </body>
 </html>

@@ -5,18 +5,26 @@ const userIdInput = document.getElementById("userId");
 const choicesEl = document.getElementById("choices");
 const buyerBtn = document.getElementById("buyerBtn");
 const buyerPanel = document.getElementById("buyerPanel");
+const settings = document.getElementById("settings");
+const settingsToggle = document.getElementById("settingsToggle");
 
 function addBubble(role, text, meta = "") {
-  const el = document.createElement("div");
-  el.className = `bubble ${role}`;
-  el.textContent = text;
+  const row = document.createElement("div");
+  row.className = `row ${role}`;
+
+  const bubble = document.createElement("div");
+  bubble.className = "bubble";
+  bubble.textContent = text;
+  row.appendChild(bubble);
+
   if (meta) {
     const metaEl = document.createElement("div");
     metaEl.className = "meta-line";
     metaEl.textContent = meta;
-    el.appendChild(metaEl);
+    row.appendChild(metaEl);
   }
-  thread.appendChild(el);
+
+  thread.appendChild(row);
   thread.scrollTop = thread.scrollHeight;
 }
 
@@ -43,6 +51,8 @@ async function sendMessage(text) {
   const userId = userIdInput.value.trim() || "ig_web_demo";
   addBubble("you", text);
   messageInput.value = "";
+  choicesEl.hidden = true;
+
   const response = await fetch("/api/chat", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -53,10 +63,26 @@ async function sendMessage(text) {
     addBubble("bot", data.error || "Request failed");
     return;
   }
-  const meta = `stage ${data.stage} · matches ${data.matchCount} · fact-check ${data.factCheckOk ? "ok" : "blocked"} · lead ${data.leadStatus}`;
-  addBubble("bot", data.reply, meta);
+
+  const metaParts = [];
+  if (data.matchCount) metaParts.push(`${data.matchCount} match${data.matchCount === 1 ? "" : "es"}`);
+  if (data.factCheckOk === false) metaParts.push("fact check blocked");
+  if (data.leadStatus && data.leadStatus !== "new") metaParts.push(data.leadStatus.replaceAll("_", " "));
+
+  addBubble("bot", data.reply, metaParts.join(" · "));
   renderChoices(data.nextQuestion);
 }
+
+settingsToggle.addEventListener("click", () => {
+  const open = settings.hasAttribute("hidden");
+  if (open) {
+    settings.removeAttribute("hidden");
+    settingsToggle.setAttribute("aria-expanded", "true");
+  } else {
+    settings.setAttribute("hidden", "");
+    settingsToggle.setAttribute("aria-expanded", "false");
+  }
+});
 
 form.addEventListener("submit", (event) => {
   event.preventDefault();
@@ -75,5 +101,7 @@ buyerBtn.addEventListener("click", async () => {
 
 addBubble(
   "bot",
-  "Test chat ready. Try the client scenarios in order, or tap a choice when one appears.\nKeep the same test buyer id to check memory."
+  "Hi. I can help with Abu Dhabi listings from the approved list.\n\nShare a budget, area, or bedroom count whenever you are ready."
 );
+
+messageInput.focus();
