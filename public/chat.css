@@ -100,8 +100,8 @@ body {
   width: 100%;
   max-width: 420px;
   height: min(760px, calc(100vh - 56px));
-  display: grid;
-  grid-template-rows: auto auto 1fr auto auto;
+  display: flex;
+  flex-direction: column;
   background: var(--paper);
   border: 1px solid rgba(28, 38, 44, 0.12);
   border-radius: 28px;
@@ -227,6 +227,8 @@ body {
 }
 
 .thread {
+  flex: 1;
+  min-height: 0;
   overflow: auto;
   padding: 16px 14px 8px;
   display: flex;
@@ -319,22 +321,32 @@ body {
 }
 
 .composer {
-  display: grid;
-  grid-template-columns: 1fr auto;
+  display: flex;
+  align-items: center;
   gap: 8px;
+  flex: 0 0 auto;
   padding: 12px 14px 16px;
   background: rgba(255, 255, 255, 0.8);
   border-top: 1px solid rgba(28, 38, 44, 0.08);
 }
 
+.composer input {
+  flex: 1;
+  min-width: 0;
+  height: 42px;
+}
+
 .composer button {
   border: 0;
   border-radius: 10px;
-  padding: 0 16px;
+  height: 42px;
+  padding: 0 18px;
   background: var(--accent);
   color: #f7fbfc;
   font-weight: 600;
   font-size: 14px;
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 .composer button:hover {
