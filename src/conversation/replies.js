@@ -59,7 +59,7 @@ export function buildConversationReply({
   const readyToPitch = canPitchBuyer(buyer) || Boolean(buyer.projectInterest);
 
   if (readyToPitch && packs.length) {
-    const intro = renderProjectIntro({ buyer, packs, mode: matchMode });
+    const intro = renderProjectIntro({ buyer, packs, matches, mode: matchMode });
     if (intro) lines.push(intro);
 
     const followUp = buildContextualFollowUp(buyer, matches, packs);

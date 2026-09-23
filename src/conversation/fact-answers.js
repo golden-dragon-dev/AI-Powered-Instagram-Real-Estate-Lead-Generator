@@ -24,11 +24,16 @@ export function answerFactQuestion(message, packs = []) {
 
 export function detectFactTopic(message) {
   const text = String(message || "").toLowerCase();
-  if (/payment\s*plan|instal+ments?|80\s*\/\s*20|split/i.test(text)) return "paymentPlan";
+  if (
+    /\bpayment\s*plan\b/i.test(text) &&
+    /\b(what|what'?s|tell|explain|details|for this|on this)\b/i.test(text)
+  ) {
+    return "paymentPlan";
+  }
   if (/handover|completion|ready date/i.test(text)) return "handover";
   if (/price|cost|how much|starting/i.test(text)) return "price";
   if (/initial|down\s*payment|booking\s*amount/i.test(text)) return "initial";
-  if (/availab|sold out|units left|remaining/i.test(text)) return "availability";
+  if (/\b(availability|sold out|units remaining)\b/i.test(text)) return "availability";
   return null;
 }
 

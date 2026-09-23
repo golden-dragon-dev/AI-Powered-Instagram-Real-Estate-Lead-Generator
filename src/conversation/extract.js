@@ -113,8 +113,11 @@ export function detectIntents(message) {
   }
   if (/\b(thank|thanks|thx)\b/i.test(text)) intents.push("thanks");
   if (
-    /\b(price|cost|how much|starting from|handover|available|availability)\b/i.test(text) ||
-    (/\bpayment\s*plan\b/i.test(text) && /\b(what|what'?s|tell|explain|details|for this|on this)\b/i.test(text))
+    /\b(price|cost|how much|starting from|handover)\b/i.test(text) ||
+    (/\b(availability|sold out|units remaining)\b/i.test(text) &&
+      /\b(what|what'?s|how|is it|are they|tell)\b/i.test(text)) ||
+    (/\bpayment\s*plan\b/i.test(text) &&
+      /\b(what|what'?s|tell|explain|details|for this|on this)\b/i.test(text))
   ) {
     intents.push("ask_facts");
   }

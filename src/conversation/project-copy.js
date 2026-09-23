@@ -1,6 +1,7 @@
 /**
  * Natural wording for confirmed project packs. Never invents missing fields.
  */
+import { describeRequirementGaps } from "./mismatch.js";
 
 function money(packField) {
   return packField?.confirmed ? packField.value : null;
@@ -19,7 +20,7 @@ function unitLabel(pack) {
   return `${pack.bedroomLabel?.value || ""} ${pack.propertyType?.value || ""}`.trim();
 }
 
-export function renderProjectCard(pack) {
+export function renderProjectCard(pack, { gaps = [] } = {}) {
   const bits = [];
   const name = pack.name?.value;
   const developer = pack.developer?.value;
@@ -49,10 +50,14 @@ export function renderProjectCard(pack) {
   if (pack.handover?.confirmed) bits.push(`handover ${pack.handover.value}`);
   else bits.push("handover not confirmed yet");
 
-  return bits.join(" · ");
+  let text = bits.join(" · ");
+  if (gaps.length) {
+    text += `\nNot an exact match: ${gaps.join(" ")}`;
+  }
+  return text;
 }
 
-export function renderProjectIntro({ buyer, packs, mode = "exact" }) {
+export function renderProjectIntro({ buyer, packs, matches = [], mode = "exact" }) {
   if (!packs.length) return null;
 
   const area = buyer.preferredAreas?.[0] || packs[0].area?.value || "Abu Dhabi";
@@ -67,19 +72,29 @@ export function renderProjectIntro({ buyer, packs, mode = "exact" }) {
       : projectNames.slice(0, 2).join(" and ");
   const verb = projectNames.length === 1 ? "is" : "are";
 
+  const packGaps = packs.slice(0, 3).map((pack, index) => {
+    const match = matches[index] || matches.find((row) => row.unit.id === pack.unitId);
+    return describeRequirementGaps(buyer, match);
+  });
+  const hasGaps = mode !== "exact" || packGaps.some((gaps) => gaps.length);
+
   let opener;
-  if (budget && area) {
+  if (hasGaps) {
     opener =
-      mode === "exact"
-        ? `${budget} opens a few doors on ${area}. ${lead} ${verb} worth a look.`
-        : `I do not have an exact fit for every detail yet, but on ${area} around ${budget}, ${lead} ${verb} a solid confirmed option.`;
+      budget && area
+        ? `I could not find an exact fit for everything you asked for on ${area} around ${budget}. Here ${verb === "is" ? "is" : "are"} the closest confirmed ${verb === "is" ? "option" : "options"}, with the differences called out.`
+        : `I could not find an exact fit for everything you asked for. Here ${verb === "is" ? "is" : "are"} the closest confirmed ${verb === "is" ? "option" : "options"}, with the differences called out.`;
+  } else if (budget && area) {
+    opener = `${budget} opens a few doors on ${area}. ${lead} ${verb} worth a look.`;
   } else if (area) {
     opener = `On ${area}, ${lead} ${verb} worth a look.`;
   } else {
     opener = `${lead} ${verb} worth a look.`;
   }
 
-  const cards = packs.slice(0, 3).map(renderProjectCard);
+  const cards = packs.slice(0, 3).map((pack, index) =>
+    renderProjectCard(pack, { gaps: packGaps[index] || [] })
+  );
   return `${opener}\n\n${cards.join("\n\n")}`;
 }
 
