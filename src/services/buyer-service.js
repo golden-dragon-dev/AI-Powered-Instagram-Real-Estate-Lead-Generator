@@ -117,6 +117,16 @@ export class BuyerService {
     return this.store.saveBuyer(merged);
   }
 
+  async replaceIntentSignals(instagramUserId, intentSignals = []) {
+    const existing = await this.getOrCreate(instagramUserId);
+    return this.store.saveBuyer({
+      ...existing,
+      intentSignals: uniqueStrings(intentSignals),
+      updatedAt: nowIso(),
+      lastSeenAt: nowIso()
+    });
+  }
+
   /** Clear search criteria so a buyer can start a new enquiry on the same IG id. */
   async resetCriteria(instagramUserId) {
     const existing = await this.getOrCreate(instagramUserId);

@@ -107,6 +107,13 @@ export class ConversationEngine {
         openToOtherAreas: true,
         intentSignals: [...new Set([...(buyer.intentSignals || []), "area_flexible"])]
       };
+    } else if (facts.area || facts.areas) {
+      // A definite area correction supersedes an earlier "open to other areas"
+      // preference. Without this, stale flexibility can bring the old area back.
+      buyer = await this.buyers.replaceIntentSignals(
+        instagramUserId,
+        (buyer.intentSignals || []).filter((signal) => signal !== "area_flexible")
+      );
     }
 
     if (facts.bedrooms !== undefined || facts.project || facts.area) {

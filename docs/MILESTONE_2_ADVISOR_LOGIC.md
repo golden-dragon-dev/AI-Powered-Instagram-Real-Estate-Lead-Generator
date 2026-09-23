@@ -147,13 +147,24 @@ node --test test/step16-client-corrections.test.js
 
 Expected: 10 tests pass.
 
-### 7. Full regression
+### 7. Natural area correction suite
+
+```bash
+node --test test/step18-natural-area-corrections.test.js
+```
+
+Expected: 61 tests pass. This includes the exact screenshot sequence where a
+buyer with a Yas studio search says `What about masdar`. The saved area must
+become Masdar City, the Yas card must not repeat, and unavailable Masdar stock
+must be stated honestly.
+
+### 8. Full regression
 
 ```bash
 npm test
 ```
 
-Expected: all tests pass.
+Expected: all 155 tests pass.
 
 ## Research basis
 

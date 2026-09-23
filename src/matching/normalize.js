@@ -10,7 +10,26 @@ const AREA_ALIASES = {
   "saadiyat island": "Saadiyat Island",
   "al reem": "Al Reem Island",
   "reem island": "Al Reem Island",
-  "al reem island": "Al Reem Island"
+  "al reem island": "Al Reem Island",
+  masdar: "Masdar City",
+  "masdar city": "Masdar City",
+  "al raha": "Al Raha Beach",
+  "al raha beach": "Al Raha Beach",
+  "raha beach": "Al Raha Beach",
+  "al maryah": "Al Maryah Island",
+  "al maryah island": "Al Maryah Island",
+  maryah: "Al Maryah Island",
+  "maryah island": "Al Maryah Island",
+  "khalifa city": "Khalifa City",
+  "mohammed bin zayed city": "Mohammed Bin Zayed City",
+  "mohamed bin zayed city": "Mohammed Bin Zayed City",
+  "mbz city": "Mohammed Bin Zayed City",
+  "al reef": "Al Reef",
+  "al ghadeer": "Al Ghadeer",
+  "al shamkha": "Al Shamkha",
+  "al raha gardens": "Al Raha Gardens",
+  "al bateen": "Al Bateen",
+  corniche: "Corniche"
 };
 
 const TYPE_ALIASES = {

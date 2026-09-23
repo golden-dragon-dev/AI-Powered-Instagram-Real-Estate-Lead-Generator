@@ -8,25 +8,44 @@ import {
 import { FINANCING_VALUES, USE_TYPES } from "../schema/fields.js";
 import { applyChoiceFacts } from "./choices.js";
 
-const AREA_PATTERNS = [
-  /\byas(?:\s+island)?\b/i,
-  /\bhudayriyat(?:\s+island)?\b/i,
-  /\bsaadiyat(?:\s+island)?\b/i,
-  /\b(?:al\s+)?reem(?:\s+island)?\b/i
-];
-
 const AREA_LABELS = {
-  yas: "Yas",
-  "yas island": "Yas",
-  hudayriyat: "Hudayriyat",
-  "hudayriyat island": "Hudayriyat",
-  saadiyat: "Saadiyat",
-  "saadiyat island": "Saadiyat",
-  reem: "Al Reem",
-  "reem island": "Al Reem",
-  "al reem": "Al Reem",
-  "al reem island": "Al Reem"
+  yas: "Yas Island",
+  "yas island": "Yas Island",
+  hudayriyat: "Hudayriyat Island",
+  "hudayriyat island": "Hudayriyat Island",
+  "al hudayriyat": "Hudayriyat Island",
+  "al hudayriyat island": "Hudayriyat Island",
+  saadiyat: "Saadiyat Island",
+  "saadiyat island": "Saadiyat Island",
+  reem: "Al Reem Island",
+  "reem island": "Al Reem Island",
+  "al reem": "Al Reem Island",
+  "al reem island": "Al Reem Island",
+  masdar: "Masdar City",
+  "masdar city": "Masdar City",
+  "al raha": "Al Raha Beach",
+  "al raha beach": "Al Raha Beach",
+  "raha beach": "Al Raha Beach",
+  "al maryah": "Al Maryah Island",
+  "al maryah island": "Al Maryah Island",
+  maryah: "Al Maryah Island",
+  "maryah island": "Al Maryah Island",
+  "khalifa city": "Khalifa City",
+  "mohammed bin zayed city": "Mohammed Bin Zayed City",
+  "mohamed bin zayed city": "Mohammed Bin Zayed City",
+  "mbz city": "Mohammed Bin Zayed City",
+  "al reef": "Al Reef",
+  "al ghadeer": "Al Ghadeer",
+  "al shamkha": "Al Shamkha",
+  "al raha gardens": "Al Raha Gardens",
+  "al bateen": "Al Bateen",
+  corniche: "Corniche"
 };
+
+const AREA_SOURCE = Object.keys(AREA_LABELS)
+  .sort((a, b) => b.length - a.length)
+  .map((value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+  .join("|");
 
 const PROJECT_HINTS = {
   "yas park views": "Yas Park Views",
@@ -154,7 +173,10 @@ export function detectIntents(message) {
   ) {
     intents.push("decline_contact");
   }
-  if (/\b(budget|aed|br\b|bedroom|yas|hudayriyat|saadiyat|reem|apartment|villa|studio|townhouse)\b/i.test(text)) {
+  if (
+    /\b(budget|aed|br\b|bedroom|apartment|villa|studio|townhouse)\b/i.test(text) ||
+    extractArea(text)
+  ) {
     intents.push("provide_facts");
   }
   if (/\b(actually|instead|change|make that|update|switch)\b/i.test(text)) {
@@ -234,29 +256,33 @@ function extractCash(text) {
 }
 
 function extractArea(text) {
-  const forgotten = [...text.matchAll(/\b(?:forget|ignore|skip|not|no more)\s+(?:about\s+)?(yas|hudayriyat|saadiyat|reem)(?:\s+island)?\b/gi)].map(
-    (m) => normalizeArea(AREA_LABELS[m[1].toLowerCase()] || m[1])
+  const forgottenPattern = new RegExp(
+    `\\b(?:forget|ignore|skip|not|no more)\\s+(?:about\\s+)?(${AREA_SOURCE})\\b`,
+    "gi"
+  );
+  const forgotten = [...text.matchAll(forgottenPattern)].map((match) =>
+    normalizeArea(AREA_LABELS[match[1].toLowerCase()] || match[1])
   );
 
-  const preferred =
-    text.match(
-      /\b(?:what about|how about|switch to|change to|instead|look at|try|prefer)\s+(yas|hudayriyat|saadiyat|reem)(?:\s+island)?\b/i
-    ) ||
-    text.match(/\b(yas|hudayriyat|saadiyat|reem)(?:\s+island)?\s+(?:instead|please)\b/i);
+  const preferredPattern = new RegExp(
+    `\\b(?:what\\s+about|how\\s+about|switch(?:ing)?\\s+to|change\\s+to|instead(?:\\s+of\\s+that)?|look(?:ing)?\\s+(?:at|in)|try|prefer|consider)\\s+(?:the\\s+)?(${AREA_SOURCE})\\b`,
+    "i"
+  );
+  const suffixPattern = new RegExp(`\\b(${AREA_SOURCE})\\s+(?:instead|please)\\b`, "i");
+  const preferred = text.match(preferredPattern) || text.match(suffixPattern);
 
   if (preferred) {
-    const raw = preferred[1] || preferred[0];
-    const key = String(raw).toLowerCase().replace(/\s+island$/, "").trim();
+    const raw = preferred[1];
+    const key = String(raw).toLowerCase().replace(/\s+/g, " ").trim();
     const area = normalizeArea(AREA_LABELS[key] || raw);
     if (area && !forgotten.includes(area)) return area;
   }
 
   const found = [];
-  for (const pattern of AREA_PATTERNS) {
-    const match = text.match(pattern);
-    if (!match) continue;
-    const key = match[0].toLowerCase().replace(/\s+/g, " ").trim();
-    const area = normalizeArea(AREA_LABELS[key] || match[0]);
+  const mentionedPattern = new RegExp(`\\b(${AREA_SOURCE})\\b`, "gi");
+  for (const match of text.matchAll(mentionedPattern)) {
+    const key = match[1].toLowerCase().replace(/\s+/g, " ").trim();
+    const area = normalizeArea(AREA_LABELS[key] || match[1]);
     if (area && !forgotten.includes(area)) found.push(area);
   }
 

@@ -145,8 +145,11 @@ export function buildConversationReply({
   }
 
   if (readyToPitch && !packs.length) {
+    const requestedArea = buyer.preferredAreas?.[0];
     lines.push(
-      "I do not have a confirmed option that fits those details yet. If you like, I can look at nearby bedroom sizes or another Abu Dhabi area with verified stock."
+      requestedArea
+        ? `I do not have a confirmed option in ${requestedArea} that fits the requirements you shared. I can check a nearby bedroom size there, or compare another Abu Dhabi area with verified stock.`
+        : "I do not have a confirmed option that fits those details yet. I can look at nearby bedroom sizes or another Abu Dhabi area with verified stock."
     );
     nextQuestion = {
       field: "preferredAreas",
