@@ -77,6 +77,7 @@ export class ConversationEngine {
       packs,
       matches: matchResult.matches,
       matchMode: matchResult.mode,
+      mismatches: matchResult.mismatches || [],
       highIntent,
       handoffRequested,
       pendingOffer: this.memory.getPendingOffer(instagramUserId)
@@ -157,6 +158,7 @@ export class ConversationEngine {
       matchCount: matchResult.matchCount,
       matchMode: matchResult.mode,
       matches: matchResult.matches,
+      mismatches: matchResult.mismatches || [],
       packs,
       check,
       missingData: missingDataHandoff(packs),

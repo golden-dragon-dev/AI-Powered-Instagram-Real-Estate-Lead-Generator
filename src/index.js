@@ -39,7 +39,6 @@ export {
   rankMatches,
   limitMatchesForPitch
 } from "./conversation/preferences.js";
-export { resolveMatches, canPitchBuyer } from "./conversation/match-resolve.js";
+export { resolveMatches, canPitchBuyer, explainSoftMismatches } from "./conversation/match-resolve.js";
 export { isAffirmation, resolveAffirmation } from "./conversation/affirmation.js";
 export { renderProjectIntro, renderProjectCard } from "./conversation/project-copy.js";
-export { describeRequirementGaps, summarizeRelaxedFields } from "./conversation/mismatch.js";

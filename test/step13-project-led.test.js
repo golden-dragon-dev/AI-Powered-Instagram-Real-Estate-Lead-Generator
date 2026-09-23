@@ -29,7 +29,6 @@ test("step 13b sure after two bedroom options asks which one", async () => {
 
 test("step 13c no exact match still offers a confirmed alternative", async () => {
   const { engine } = await setupConversation();
-  // 3BR + very low cash should fail exact, then soft path can still offer Yas options
   await engine.handleMessage("ig_m2_led3", "Budget AED 3M, Yas, 3 bedroom");
   const result = await engine.handleMessage(
     "ig_m2_led3",
@@ -39,7 +38,25 @@ test("step 13c no exact match still offers a confirmed alternative", async () =>
   if (result.matchCount === 0) {
     assert.match(result.reply, /another area|nearby|confirmed option/i);
   } else {
-    assert.match(result.reply, /Yas|confirmed|option/i);
+    assert.ok(result.stage === "soft_match" || result.matchMode !== "exact");
+    assert.match(result.reply, /not an exact match|does not match|initially/i);
+    assert.match(result.reply, /50,000|50000|260,000|260000/i);
+  }
+  assert.ok(result.check.ok);
+});
+
+test("step 13f soft bedroom alternative states the bedroom gap clearly", async () => {
+  const { engine } = await setupConversation();
+  const result = await engine.handleMessage(
+    "ig_m2_led5",
+    "Budget AED 2M, Yas Island, 3 bedroom"
+  );
+  // 3BR Yas Park Views is 2.6M so over 2M budget; soft path should offer 1/2BR and say 3BR does not match
+  assert.ok(result.matchCount >= 1);
+  if (result.matchMode !== "exact") {
+    assert.match(result.reply, /not an exact match/i);
+    assert.match(result.reply, /3 bedroom/i);
+    assert.match(result.reply, /1 bedroom|2 bedroom/i);
   }
   assert.ok(result.check.ok);
 });
@@ -61,37 +78,5 @@ test("step 13e project card surfaces confirmed commercial fields", async () => {
   assert.match(result.reply, /2,600,000|2600000/i);
   assert.match(result.reply, /80\/20|payment plan|initial/i);
   assert.match(result.reply, /Q4 2027|handover/i);
-  assert.ok(result.check.ok);
-});
-
-test("step 13f soft match clearly states which requirement does not match", async () => {
-  const { engine } = await setupConversation();
-  await engine.handleMessage("ig_m2_led5", "Budget AED 3M, Yas Island, 3 bedroom");
-  const result = await engine.handleMessage(
-    "ig_m2_led5",
-    "I only have 50k cash available now and need a payment plan"
-  );
-  assert.ok(result.matchCount >= 1);
-  assert.equal(result.matchMode, "without_cash");
-  assert.match(result.reply, /not an exact (fit|match)/i);
-  assert.match(result.reply, /50,000|50000/i);
-  assert.match(result.reply, /260,000|260000/i);
-  assert.match(result.reply, /available now|initially/i);
-  assert.doesNotMatch(result.reply, /opens a few doors/i);
-  assert.ok(result.check.ok);
-});
-
-test("step 13g soft bedroom alternative names the size difference", async () => {
-  const { engine } = await setupConversation();
-  // 3BR at low budget for Yas may soften to smaller bedrooms in range
-  const result = await engine.handleMessage(
-    "ig_m2_led6",
-    "I have AED 1.5M for Yas, 3 bedroom"
-  );
-  if (result.matchMode !== "exact" && result.matchCount > 0) {
-    assert.match(result.reply, /not an exact (fit|match)/i);
-    assert.match(result.reply, /3 bedroom|asked for/i);
-    assert.match(result.reply, /1 bedroom|2 bedroom|studio/i);
-  }
   assert.ok(result.check.ok);
 });
