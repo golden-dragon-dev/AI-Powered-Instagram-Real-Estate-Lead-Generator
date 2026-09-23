@@ -7,6 +7,7 @@ import {
 } from "../matching/normalize.js";
 import { FINANCING_VALUES, USE_TYPES } from "../schema/fields.js";
 import { applyChoiceFacts } from "./choices.js";
+import { refineTurnIntent } from "./intent-policy.js";
 
 const AREA_LABELS = {
   yas: "Yas Island",
@@ -118,9 +119,12 @@ export function extractFactsFromMessage(message) {
   if (intents.includes("callback")) signals.push("callback_request");
   if (intents.includes("agent")) signals.push("agent_request");
 
-  if (signals.length) facts.intentSignals = signals;
-
-  return { facts, signals, intents };
+  const refined = refineTurnIntent({ intents, signals, facts, message: text });
+  return {
+    facts: refined.facts,
+    signals: refined.signals,
+    intents: refined.intents
+  };
 }
 
 export function detectIntents(message) {
@@ -147,11 +151,15 @@ export function detectIntents(message) {
   if (/\b(looking|interested|want|need|search|find|show|recommend|options?|what do you (have|recommend))\b/i.test(text)) {
     intents.push("search");
   }
-  if (/\b(reserve|book|booking|hold|secure)\b/i.test(text)) {
+  const viewingMention = /\b(viewing|visit|tour|see it|site visit)\b/i.test(text);
+  const reserveMention =
+    /\b(reserve|hold|secure)\b/i.test(text) ||
+    (/\b(book|booking)\b/i.test(text) && !viewingMention);
+  if (reserveMention) {
     intents.push("reserve");
     intents.push("high_intent");
   }
-  if (/\b(viewing|visit|tour|see it|site visit)\b/i.test(text)) {
+  if (viewingMention) {
     intents.push("viewing");
     intents.push("high_intent");
   }
@@ -169,7 +177,8 @@ export function detectIntents(message) {
   if (
     /\b(don'?t want to (give|share)|prefer not|no phone|without (my )?phone|skip (the )?phone|won'?t give|not giving (my )?phone|keep browsing|no contact)\b/i.test(
       text
-    )
+    ) &&
+    !/\b(whatsapp|no calls?|don'?t call)\b/i.test(text)
   ) {
     intents.push("decline_contact");
   }

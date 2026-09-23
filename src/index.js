@@ -31,6 +31,11 @@ export {
   understandMessageLocally,
   mergeUnderstanding
 } from "./conversation/understand.js";
+export {
+  refineTurnIntent,
+  shouldSendAdvisorAlert,
+  alertReasonFromTurn
+} from "./conversation/intent-policy.js";
 export { buildConversationReply } from "./conversation/replies.js";
 export {
   loadQualificationChoices,
@@ -53,3 +58,15 @@ export {
 } from "./conversation/fit-assess.js";
 export { isAffirmation, resolveAffirmation } from "./conversation/affirmation.js";
 export { renderProjectIntro, renderProjectCard } from "./conversation/project-copy.js";
+export { IntegrationOrchestrator } from "./integrations/orchestrator.js";
+export { upsertHubSpotContact, ensureHubSpotProperties } from "./integrations/hubspot.js";
+export { sendWhatsAppAlert, AlertLedger } from "./integrations/whatsapp.js";
+export {
+  verifySignature,
+  verifyWebhookChallenge,
+  parseInstagramMessages,
+  sendInstagramText
+} from "./integrations/meta.js";
+export { IntegrationLog } from "./integrations/integration-log.js";
+export { ProcessedEventStore } from "./integrations/processed-events.js";
+export { DurableConversationMemory } from "./integrations/durable-memory.js";

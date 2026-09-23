@@ -43,6 +43,16 @@ export function buildConversationReply({
     return finish(lines, "qualifying", nextQuestion, null);
   }
 
+  if (intents.includes("stop_sales")) {
+    lines.push("Understood. I will pause the sales follow-up. Message me any time if you want to look again.");
+    return finish(lines, "paused", null, null);
+  }
+
+  if (buyer.salesPathStopped && !intents.includes("search") && !intents.includes("provide_facts") && !intents.includes("continue")) {
+    lines.push("Happy to stay available if you want confirmed details later.");
+    return finish(lines, "paused", null, null);
+  }
+
   if (intents.includes("greet")) {
     lines.push("Hi. Happy to help with Abu Dhabi off-plan options.");
   }
@@ -55,8 +65,11 @@ export function buildConversationReply({
   if (ack) {
     lines.push(ack);
   }
-  if ((handoffRequested || highIntent) && !declineContact) {
+  if ((handoffRequested || highIntent) && !declineContact && !intents.includes("eoi_info")) {
     lines.push("I can flag this for an advisor while we stay with confirmed figures.");
+  }
+  if (intents.includes("decline_reserve")) {
+    lines.push("No reservation on my side. We can keep reviewing confirmed options.");
   }
 
   // "Hi" alone must not dump a soft match from an earlier test session.
@@ -132,10 +145,18 @@ export function buildConversationReply({
     nextPending = followUp.pendingOffer;
 
     if (highIntent && !declineContact) {
-      const contact = nextQualificationQuestion(buyer, { includeContact: true });
-      if (contact) {
-        lines.push(softContactPrompt(contact));
-        nextQuestion = contact;
+      if (buyer.preferredContactChannel === "whatsapp" || buyer.noCalls) {
+        lines.push(
+          buyer.noCalls
+            ? "I will note WhatsApp as the preferred contact and keep calls off."
+            : "I will note WhatsApp as the preferred contact."
+        );
+      } else {
+        const contact = nextQualificationQuestion(buyer, { includeContact: true });
+        if (contact) {
+          lines.push(softContactPrompt(contact));
+          nextQuestion = contact;
+        }
       }
     } else if (highIntent && declineContact) {
       lines.push("I can keep sharing confirmed details here.");

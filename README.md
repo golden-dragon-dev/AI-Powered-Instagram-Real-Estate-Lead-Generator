@@ -4,6 +4,7 @@ Instagram enquiry system for Abu Dhabi real estate.
 
 Milestone 1 covers the property database, buyer records, matching, and confirmed-data replies.
 Milestone 2 adds the test conversation layer: qualification, buyer memory, quick replies, and fact-checked replies.
+Milestone 3 connects that engine to Instagram Messaging, HubSpot, and WhatsApp high-intent alerts.
 
 ## Milestone 1
 
@@ -26,6 +27,15 @@ Milestone 2 adds the test conversation layer: qualification, buyer memory, quick
 - Fact check before send
 - Web test chat and CLI chat
 
+## Milestone 3
+
+- Meta Instagram webhook with signature verification and duplicate protection
+- Fact-checked replies sent back through Instagram
+- HubSpot contact upsert by Instagram user id
+- WhatsApp Cloud API alerts for viewing, reservation, and agent requests
+- Informational EOI, negated reserve, and `I'm good` stop-path handling
+- Redacted integration failure logging on a Railway volume
+
 ## Run
 
 Node 18 or newer. No required extra packages.
@@ -34,23 +44,26 @@ Node 18 or newer. No required extra packages.
 npm test
 npm run verify:m1
 npm run verify:m2
+npm run verify:m3
 npm run match -- --budget 3M --cash 500k --area "Yas" --bedrooms 3 --payment-plan
 npm run chat:web
 npm run chat
+npm run hubspot:setup
 ```
 
 Web test chat opens at `http://127.0.0.1:8787/`
+Meta webhook path: `http://127.0.0.1:8787/webhook/meta`
 
 Docs:
 
 - Milestone 1: `docs/MILESTONE_1.md`
 - Milestone 2: `docs/MILESTONE_2.md`
+- Milestone 3: `docs/MILESTONE_3.md`
 
 ## Sample listings
 
 `data/seed` is demo Abu Dhabi stock for tests. It is not live inventory. Replace it in Airtable later. Matching code stays the same.
 
-## Next milestones
+## Next milestone
 
-- Milestone 3: Instagram Messaging API, HubSpot, high-intent alerts
 - Milestone 4: acceptance tests, production deploy, docs, handover

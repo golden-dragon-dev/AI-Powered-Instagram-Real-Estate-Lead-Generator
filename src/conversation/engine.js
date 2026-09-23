@@ -8,17 +8,20 @@ import { polishReplyWithModel } from "./llm.js";
 import { understandMessageWithModel, understandMessageLocally, mergeUnderstanding } from "./understand.js";
 import { isAffirmation, resolveAffirmation } from "./affirmation.js";
 import { retrieveFacts } from "../facts/retrieval.js";
+import {
+  alertReasonFromTurn,
+  hasAlertableIntent,
+  refineTurnIntent,
+  shouldSendAdvisorAlert
+} from "./intent-policy.js";
 
-function hasHighIntent(intents, buyer) {
-  if (intents.includes("high_intent")) return true;
-  const signals = buyer.intentSignals || [];
-  return signals.some((s) =>
-    ["high_intent", "reserve_interest", "viewing_request", "callback_request", "agent_request"].includes(s)
-  );
+function hasHighIntent(intents, signals = []) {
+  return hasAlertableIntent(intents, signals);
 }
 
-function leadStatusFor(buyer, intents, matchCount) {
-  if (hasHighIntent(intents, buyer)) return "high_intent";
+function leadStatusFor(buyer, intents, signals, matchCount) {
+  if (intents.includes("stop_sales") || buyer.salesPathStopped) return "paused";
+  if (hasHighIntent(intents, signals)) return "high_intent";
   if (matchCount > 0 && isCoreQualified(buyer)) return "qualified";
   if (canPitchBuyer(buyer)) return "engaged";
   if (buyer.budgetAed || buyer.preferredAreas?.length) return "engaged";
@@ -66,12 +69,28 @@ export class ConversationEngine {
 
     const merged = mergeUnderstanding(base, understanding);
     let { facts, signals, intents, unsure, ack } = merged;
+    const refined = refineTurnIntent({ intents, signals, facts, message: text });
+    facts = refined.facts;
+    signals = refined.signals;
+    intents = refined.intents;
+
+    // A new search or fact update reopens a previously paused sales path.
+    if (
+      buyerWouldResume(facts, intents) &&
+      (existingBuyer.salesPathStopped || existingBuyer.followUpStatus === "paused")
+    ) {
+      facts.salesPathStopped = false;
+      if (!facts.followUpStatus) facts.followUpStatus = "none";
+    }
+
     const updatedFields = [];
     if (facts.budget !== undefined) updatedFields.push("budget");
     if (facts.cash !== undefined) updatedFields.push("cash");
     if (facts.area || facts.areas) updatedFields.push("area");
     if (facts.bedrooms !== undefined) updatedFields.push("bedrooms");
     if (facts.financing) updatedFields.push("financing");
+    if (facts.preferredContactChannel) updatedFields.push("contact_channel");
+    if (facts.noCalls === true) updatedFields.push("no_calls");
 
     const pendingOffer = this.memory.getPendingOffer(instagramUserId);
     if (isAffirmation(text) && pendingOffer) {
@@ -130,7 +149,9 @@ export class ConversationEngine {
     });
 
     const handoffRequested = intents.includes("agent") || Boolean(options.handoffRequested);
-    const highIntent = hasHighIntent(intents, buyer);
+    const highIntent = hasHighIntent(intents, signals) && !buyer.salesPathStopped && !intents.includes("stop_sales");
+    const alertReason = alertReasonFromTurn(intents, signals);
+    const alertRecommended = shouldSendAdvisorAlert({ intents, signals, buyer });
 
     const catalog = this.properties.catalog();
     const matchResult = resolveMatches(catalog, buyer);
@@ -194,20 +215,44 @@ export class ConversationEngine {
       draft = { ...draft, text: replyText, stage: "fact_check_fallback", polished: false };
     }
 
-    const status = leadStatusFor(buyer, intents, matchResult.matchCount);
+    const status = leadStatusFor(buyer, intents, signals, matchResult.matchCount);
     const summary = this.memory.buildSummary(instagramUserId, {
       ...buyer,
       conversationSummary: summarizeBuyer(buyer)
     });
 
+    const followUpStatus = intents.includes("stop_sales")
+      ? "paused"
+      : alertRecommended && !buyer.contactDeclined
+        ? "pending_advisor"
+        : buyer.followUpStatus === "paused" && !buyer.salesPathStopped
+          ? "none"
+          : buyer.followUpStatus || "none";
+
+    // Current-turn signals replace sticky high-intent flags so old reserve/viewing
+    // requests do not keep firing alerts after the buyer declines or stops.
+    const durableSignals = (signals || []).filter(
+      (signal) => !["high_intent", "reserve_interest", "viewing_request", "callback_request", "agent_request"].includes(signal)
+    );
+
     buyer = await this.buyers.remember(instagramUserId, {
-      intentSignals: signals.length ? signals : undefined,
-      contactDeclined: intents.includes("decline_contact") ? true : undefined
+      intentSignals: durableSignals,
+      contactDeclined: intents.includes("decline_contact") ? true : undefined,
+      preferredContactChannel: facts.preferredContactChannel,
+      noCalls: facts.noCalls,
+      salesPathStopped: facts.salesPathStopped
     });
+    buyer = await this.buyers.replaceIntentSignals(instagramUserId, [
+      ...durableSignals,
+      ...(facts.openToOtherAreas || signals.includes("area_flexible") ? ["area_flexible"] : [])
+    ]);
     buyer = await this.buyers.updateMeta(instagramUserId, {
       leadStatus: status,
       conversationSummary: summary,
-      followUpStatus: highIntent && !buyer.contactDeclined ? "pending_advisor" : buyer.followUpStatus || "none"
+      followUpStatus,
+      preferredContactChannel: facts.preferredContactChannel || buyer.preferredContactChannel,
+      noCalls: facts.noCalls === true ? true : buyer.noCalls,
+      salesPathStopped: facts.salesPathStopped === true ? true : Boolean(buyer.salesPathStopped && !buyerWouldResume(facts, intents))
     });
 
     this.memory.addTurn(instagramUserId, {
@@ -229,6 +274,8 @@ export class ConversationEngine {
       intents,
       signals,
       unsure,
+      alertReason,
+      alertRecommended,
       criteria: matchResult.criteria,
       matchCount: matchResult.matchCount,
       matchMode: matchResult.mode,
@@ -245,6 +292,21 @@ export class ConversationEngine {
       context: this.memory.recentContext(instagramUserId)
     };
   }
+}
+
+function buyerWouldResume(facts, intents) {
+  return Boolean(
+    facts.budget !== undefined ||
+      facts.cash !== undefined ||
+      facts.area ||
+      facts.areas ||
+      facts.bedrooms !== undefined ||
+      facts.project ||
+      intents.includes("search") ||
+      intents.includes("start_fresh") ||
+      intents.includes("continue") ||
+      intents.includes("provide_facts")
+  );
 }
 
 export function createConversationEngine(services, options = {}) {

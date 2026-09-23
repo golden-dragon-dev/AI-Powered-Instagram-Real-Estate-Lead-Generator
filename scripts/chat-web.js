@@ -7,9 +7,12 @@ import { createCatalogStore } from "../src/store/create-store.js";
 import { BuyerService } from "../src/services/buyer-service.js";
 import { PropertyService } from "../src/services/property-service.js";
 import { ConversationEngine } from "../src/conversation/engine.js";
-import { ConversationMemory } from "../src/conversation/memory.js";
 import { listChoiceGroups } from "../src/conversation/choices.js";
 import { createAnthropicClient } from "../src/conversation/llm.js";
+import { DurableConversationMemory } from "../src/integrations/durable-memory.js";
+import { IntegrationOrchestrator } from "../src/integrations/orchestrator.js";
+import { IntegrationLog } from "../src/integrations/integration-log.js";
+import { runtimeRoot } from "../src/integrations/json-store.js";
 
 loadEnv();
 
@@ -17,15 +20,27 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PUBLIC_DIR = path.join(ROOT, "public");
 const PORT = Number(process.env.PORT || process.env.CHAT_PORT || 8787);
 const HOST = process.env.HOST || "0.0.0.0";
+const IS_PRODUCTION = String(process.env.NODE_ENV || "").toLowerCase() === "production";
+const ALLOW_TEST_CHAT = process.env.ALLOW_TEST_CHAT === "true" || !IS_PRODUCTION;
+const ALLOW_RUNTIME_LLM_KEY = process.env.ALLOW_RUNTIME_LLM_KEY === "true" && !IS_PRODUCTION;
 
 const store = await createCatalogStore();
 const buyers = new BuyerService(store);
 const properties = new PropertyService(store);
-const memory = new ConversationMemory();
+const memory = new DurableConversationMemory({ rootDir: runtimeRoot() });
+await memory.ensureReady();
 
-/** Runtime Claude client. Key can come from .env or Settings on the test page. Never logged. */
+/** Runtime Claude client. Env key only in production. */
 let llm = process.env.ANTHROPIC_API_KEY ? createAnthropicClient() : null;
 const engine = new ConversationEngine({ buyers, properties, memory, llm });
+const integrationLog = new IntegrationLog({ rootDir: runtimeRoot() });
+const orchestrator = new IntegrationOrchestrator({
+  engine,
+  buyers,
+  env: process.env,
+  rootDir: runtimeRoot(),
+  log: integrationLog
+});
 
 function applyLlmClient(client) {
   llm = client;
@@ -47,7 +62,7 @@ function sendJson(res, status, body) {
   res.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
     "access-control-allow-origin": "*",
-    "access-control-allow-headers": "content-type",
+    "access-control-allow-headers": "content-type, x-hub-signature-256",
     "access-control-allow-methods": "GET,POST,OPTIONS"
   });
   res.end(payload);
@@ -62,20 +77,19 @@ function sendText(res, status, text, type = "text/plain; charset=utf-8") {
   res.end(text);
 }
 
-function readBody(req) {
+function readRawBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     req.on("data", (chunk) => chunks.push(chunk));
-    req.on("end", () => {
-      try {
-        const raw = Buffer.concat(chunks).toString("utf8");
-        resolve(raw ? JSON.parse(raw) : {});
-      } catch (error) {
-        reject(error);
-      }
-    });
+    req.on("end", () => resolve(Buffer.concat(chunks)));
     req.on("error", reject);
   });
+}
+
+async function readJsonBody(req) {
+  const raw = await readRawBody(req);
+  if (!raw.length) return {};
+  return JSON.parse(raw.toString("utf8"));
 }
 
 function serveStatic(urlPath, res) {
@@ -108,9 +122,53 @@ const server = http.createServer(async (req, res) => {
     return sendJson(res, 200, {
       ok: true,
       source: store.source || "local",
-      milestone: 2,
+      milestone: 3,
+      integrations: {
+        metaConfigured: Boolean(process.env.META_PAGE_ACCESS_TOKEN && process.env.META_APP_SECRET),
+        hubspotConfigured: Boolean(process.env.HUBSPOT_ACCESS_TOKEN),
+        whatsappConfigured: Boolean(
+          process.env.WHATSAPP_ACCESS_TOKEN &&
+            process.env.WHATSAPP_PHONE_NUMBER_ID &&
+            process.env.WHATSAPP_ALERT_TO &&
+            process.env.WHATSAPP_TEMPLATE_NAME
+        )
+      },
       ...llmStatus()
     });
+  }
+
+  if (req.method === "GET" && (url.pathname === "/webhook/meta" || url.pathname === "/api/meta/webhook")) {
+    const verified = orchestrator.handleVerify(Object.fromEntries(url.searchParams.entries()));
+    if (!verified.ok) return sendText(res, 403, "Verification failed");
+    return sendText(res, 200, verified.challenge);
+  }
+
+  if (req.method === "POST" && (url.pathname === "/webhook/meta" || url.pathname === "/api/meta/webhook")) {
+    try {
+      const raw = await readRawBody(req);
+      const outcome = await orchestrator.handleWebhook({
+        rawBody: raw,
+        signatureHeader: req.headers["x-hub-signature-256"]
+      });
+      if (!outcome.ok) return sendJson(res, outcome.status || 400, { error: outcome.error });
+      return sendJson(res, 200, { ok: true, accepted: outcome.accepted });
+    } catch (error) {
+      await integrationLog.record({
+        integration: "meta",
+        operation: "webhook",
+        status: "error",
+        message: error.message
+      });
+      return sendJson(res, 200, { ok: true, accepted: 0, deferredError: true });
+    }
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/integrations/errors") {
+    if (IS_PRODUCTION && process.env.ALLOW_INTEGRATION_ERROR_READ !== "true") {
+      return sendJson(res, 404, { error: "Not found" });
+    }
+    const rows = await integrationLog.list(100);
+    return sendJson(res, 200, { errors: rows });
   }
 
   if (req.method === "GET" && url.pathname === "/api/llm") {
@@ -118,8 +176,11 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "POST" && url.pathname === "/api/llm") {
+    if (!ALLOW_RUNTIME_LLM_KEY) {
+      return sendJson(res, 403, { error: "Runtime LLM key entry is disabled in this environment." });
+    }
     try {
-      const body = await readBody(req);
+      const body = await readJsonBody(req);
       const apiKey = String(body.apiKey || "").trim();
       if (!apiKey) {
         applyLlmClient(null);
@@ -139,21 +200,23 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "GET" && url.pathname === "/api/choices") {
+    if (!ALLOW_TEST_CHAT) return sendJson(res, 404, { error: "Not found" });
     return sendJson(res, 200, listChoiceGroups());
   }
 
   if (req.method === "GET" && url.pathname === "/api/buyer") {
+    if (!ALLOW_TEST_CHAT) return sendJson(res, 404, { error: "Not found" });
     const userId = url.searchParams.get("userId") || "ig_web_demo";
     return sendJson(res, 200, { buyer: store.getBuyer(userId) });
   }
 
   if (req.method === "POST" && url.pathname === "/api/chat") {
+    if (!ALLOW_TEST_CHAT) return sendJson(res, 404, { error: "Not found" });
     try {
-      const body = await readBody(req);
+      const body = await readJsonBody(req);
       const userId = String(body.userId || "ig_web_demo").trim() || "ig_web_demo";
       const message = String(body.message || "").trim();
       if (!message) return sendJson(res, 400, { error: "message is required" });
-      // Claude polish is on by default when a key is loaded; client can pass useLlm:false to force templates.
       const useLlm = body.useLlm === undefined ? true : Boolean(body.useLlm);
       const result = await engine.handleMessage(userId, message, { useLlm });
       return sendJson(res, 200, {
@@ -163,6 +226,9 @@ const server = http.createServer(async (req, res) => {
         fitTier: result.fitTier,
         factCheckOk: result.check.ok,
         leadStatus: result.buyer.leadStatus,
+        followUpStatus: result.buyer.followUpStatus,
+        alertRecommended: Boolean(result.alertRecommended),
+        alertReason: result.alertReason || null,
         nextQuestion: result.nextQuestion,
         claudeUsed: Boolean(result.polished),
         claudeEnabled: Boolean(engine.llm?.apiKey),
@@ -176,6 +242,9 @@ const server = http.createServer(async (req, res) => {
           financing: result.buyer.financing,
           useType: result.buyer.useType,
           contactDeclined: result.buyer.contactDeclined,
+          preferredContactChannel: result.buyer.preferredContactChannel,
+          noCalls: result.buyer.noCalls,
+          salesPathStopped: result.buyer.salesPathStopped,
           intentSignals: result.buyer.intentSignals
         },
         matches: result.matches.map((row) => ({
@@ -190,6 +259,10 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "GET") {
+    if (!ALLOW_TEST_CHAT && url.pathname === "/") {
+      return sendJson(res, 200, { ok: true, milestone: 3, service: "harbour-desk" });
+    }
+    if (!ALLOW_TEST_CHAT) return sendJson(res, 404, { error: "Not found" });
     return serveStatic(url.pathname, res);
   }
 
@@ -198,7 +271,8 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, HOST, () => {
   const local = `http://127.0.0.1:${PORT}/`;
-  console.log(`Milestone 2 test chat running`);
+  console.log(`Milestone 3 Instagram lead service running`);
   console.log(`Open ${local}`);
+  console.log(`Meta webhook: ${local}webhook/meta`);
   console.log(`Catalog source: ${store.source || "local"}`);
 });

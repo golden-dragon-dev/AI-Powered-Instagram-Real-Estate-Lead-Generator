@@ -23,6 +23,18 @@ export function mergeBuyer(existing, patch) {
   const next = { ...base };
   for (const [key, value] of Object.entries(patch)) {
     if (key === "instagramUserId") continue;
+    if (key === "salesPathStopped" || key === "noCalls") {
+      if (value === true || value === false) next[key] = value;
+      continue;
+    }
+    if (key === "preferredContactChannel" || key === "hubspotContactId" || key === "lastAlertKey" || key === "lastAlertAt") {
+      if (value !== undefined && value !== null && String(value).trim() !== "") next[key] = value;
+      continue;
+    }
+    if (key === "followUpStatus" && value) {
+      next.followUpStatus = value;
+      continue;
+    }
     if (!hasValue(value)) continue;
     next[key] = value;
   }
@@ -38,7 +50,7 @@ export function mergeBuyer(existing, patch) {
     next.bedrooms = uniqueNumbers(patch.bedrooms);
   }
   if (hasValue(patch.intentSignals)) {
-    next.intentSignals = uniqueStrings([...(base.intentSignals || []), ...patch.intentSignals]);
+    next.intentSignals = uniqueStrings(patch.intentSignals);
   }
   if (patch.contactDeclined === true) next.contactDeclined = true;
   if (patch.contactDeclined === false) next.contactDeclined = false;
@@ -79,6 +91,14 @@ export function buyerFromKnownFacts(instagramUserId, facts = {}) {
   if (facts.phone) patch.phone = facts.phone;
   if (facts.contactDeclined === true) patch.contactDeclined = true;
   if (facts.intentSignals) patch.intentSignals = facts.intentSignals;
+  if (facts.preferredContactChannel) patch.preferredContactChannel = facts.preferredContactChannel;
+  if (facts.noCalls === true) patch.noCalls = true;
+  if (facts.noCalls === false) patch.noCalls = false;
+  if (facts.salesPathStopped === true) patch.salesPathStopped = true;
+  if (facts.salesPathStopped === false) patch.salesPathStopped = false;
+  if (facts.hubspotContactId) patch.hubspotContactId = facts.hubspotContactId;
+  if (facts.lastAlertKey) patch.lastAlertKey = facts.lastAlertKey;
+  if (facts.lastAlertAt) patch.lastAlertAt = facts.lastAlertAt;
   if (facts.conversationSummary) patch.conversationSummary = facts.conversationSummary;
   if (facts.leadStatus) patch.leadStatus = facts.leadStatus;
   if (facts.followUpStatus) patch.followUpStatus = facts.followUpStatus;
@@ -112,6 +132,12 @@ export class BuyerService {
       leadStatus: meta.leadStatus,
       followUpStatus: meta.followUpStatus,
       intentSignals: meta.intentSignals,
+      preferredContactChannel: meta.preferredContactChannel,
+      hubspotContactId: meta.hubspotContactId,
+      lastAlertKey: meta.lastAlertKey,
+      lastAlertAt: meta.lastAlertAt,
+      ...(meta.noCalls !== undefined ? { noCalls: meta.noCalls } : {}),
+      ...(meta.salesPathStopped !== undefined ? { salesPathStopped: meta.salesPathStopped } : {}),
       ...(meta.contactDeclined !== undefined ? { contactDeclined: meta.contactDeclined } : {})
     });
     return this.store.saveBuyer(merged);
@@ -125,6 +151,11 @@ export class BuyerService {
       updatedAt: nowIso(),
       lastSeenAt: nowIso()
     });
+  }
+
+  async patchBuyer(instagramUserId, patch = {}) {
+    const existing = await this.getOrCreate(instagramUserId);
+    return this.store.saveBuyer(mergeBuyer(existing, { ...patch, instagramUserId }));
   }
 
   /** Clear search criteria so a buyer can start a new enquiry on the same IG id. */
