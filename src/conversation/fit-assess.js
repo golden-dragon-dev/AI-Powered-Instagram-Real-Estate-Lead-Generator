@@ -88,7 +88,11 @@ function assessDimensions(candidate, buyer) {
     );
   }
 
-  if (wantedType) {
+  // "Studio" is represented by bedrooms = 0 as well as property type. Count it
+  // once so the score and explanation do not duplicate the same requirement.
+  const studioAlreadyRepresented =
+    normalizePropertyType(wantedType) === "studio" && wantedBeds.includes(0);
+  if (wantedType && !studioAlreadyRepresented) {
     const normalized = normalizePropertyType(wantedType);
     const matched =
       normalized === "studio"

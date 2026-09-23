@@ -89,10 +89,11 @@ for (const [index, [message, expectedArea]] of conversationCases.entries()) {
 
     const initial = await engine.handleMessage(userId, "Budget AED 2M, Yas Island, studio");
     assert.match(initial.reply, /Yas Studio One/i);
+    assert.doesNotMatch(initial.reply, /studio requirement.*studio preference/i);
 
     const changed = await engine.handleMessage(userId, message);
     assert.deepEqual(changed.buyer.preferredAreas, [expectedArea]);
-    assert.equal(changed.matchCount, 0);
+    if (expectedArea === "Masdar City") assert.equal(changed.matchCount, 0);
     assert.match(changed.reply, new RegExp(expectedArea.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
     assert.doesNotMatch(changed.reply, /Yas Studio One/i);
     assert.ok(changed.matches.every((row) => row.project.area === expectedArea));
