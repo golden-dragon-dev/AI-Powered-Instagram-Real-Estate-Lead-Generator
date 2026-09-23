@@ -226,6 +226,19 @@ body {
   font-weight: 500;
 }
 
+.settings-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ink);
+}
+
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .thread {
   flex: 1;
   min-height: 0;

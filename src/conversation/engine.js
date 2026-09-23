@@ -161,6 +161,7 @@ export class ConversationEngine {
     return {
       reply: replyText,
       stage: draft.stage,
+      polished: Boolean(draft.polished),
       buyer,
       intents,
       signals,

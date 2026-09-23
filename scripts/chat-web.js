@@ -22,8 +22,25 @@ const store = await createCatalogStore();
 const buyers = new BuyerService(store);
 const properties = new PropertyService(store);
 const memory = new ConversationMemory();
-const llm = process.env.ANTHROPIC_API_KEY ? createAnthropicClient() : null;
+
+/** Runtime Claude client. Key can come from .env or Settings on the test page. Never logged. */
+let llm = process.env.ANTHROPIC_API_KEY ? createAnthropicClient() : null;
 const engine = new ConversationEngine({ buyers, properties, memory, llm });
+
+function applyLlmClient(client) {
+  llm = client;
+  engine.llm = client;
+}
+
+function llmStatus() {
+  const enabled = Boolean(llm?.apiKey);
+  const key = llm?.apiKey || "";
+  return {
+    claudeEnabled: enabled,
+    model: enabled ? llm.model : null,
+    keyHint: enabled && key.length >= 4 ? `…${key.slice(-4)}` : null
+  };
+}
 
 function sendJson(res, status, body) {
   const payload = JSON.stringify(body);
@@ -91,8 +108,34 @@ const server = http.createServer(async (req, res) => {
     return sendJson(res, 200, {
       ok: true,
       source: store.source || "local",
-      milestone: 2
+      milestone: 2,
+      ...llmStatus()
     });
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/llm") {
+    return sendJson(res, 200, llmStatus());
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/llm") {
+    try {
+      const body = await readBody(req);
+      const apiKey = String(body.apiKey || "").trim();
+      if (!apiKey) {
+        applyLlmClient(null);
+        return sendJson(res, 200, { ok: true, ...llmStatus() });
+      }
+      if (!apiKey.startsWith("sk-ant-")) {
+        return sendJson(res, 400, {
+          error: "That does not look like an Anthropic key. It should start with sk-ant-."
+        });
+      }
+      const model = String(body.model || process.env.ANTHROPIC_MODEL || "").trim() || undefined;
+      applyLlmClient(createAnthropicClient({ apiKey, model }));
+      return sendJson(res, 200, { ok: true, ...llmStatus() });
+    } catch (error) {
+      return sendJson(res, 500, { error: error.message || String(error) });
+    }
   }
 
   if (req.method === "GET" && url.pathname === "/api/choices") {
@@ -110,9 +153,9 @@ const server = http.createServer(async (req, res) => {
       const userId = String(body.userId || "ig_web_demo").trim() || "ig_web_demo";
       const message = String(body.message || "").trim();
       if (!message) return sendJson(res, 400, { error: "message is required" });
-      const result = await engine.handleMessage(userId, message, {
-        useLlm: Boolean(body.useLlm)
-      });
+      // Claude polish is on by default when a key is loaded; client can pass useLlm:false to force templates.
+      const useLlm = body.useLlm === undefined ? true : Boolean(body.useLlm);
+      const result = await engine.handleMessage(userId, message, { useLlm });
       return sendJson(res, 200, {
         reply: result.reply,
         stage: result.stage,
@@ -120,6 +163,8 @@ const server = http.createServer(async (req, res) => {
         factCheckOk: result.check.ok,
         leadStatus: result.buyer.leadStatus,
         nextQuestion: result.nextQuestion,
+        claudeUsed: Boolean(result.polished),
+        claudeEnabled: Boolean(engine.llm?.apiKey),
         buyer: {
           budgetAed: result.buyer.budgetAed,
           cashAvailableAed: result.buyer.cashAvailableAed,

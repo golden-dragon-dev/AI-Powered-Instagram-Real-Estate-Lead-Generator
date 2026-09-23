@@ -48,8 +48,23 @@
           Buyer id
           <input id="userId" value="" spellcheck="false" />
         </label>
-        <button type="button" id="newChatBtn">New chat</button>
-        <button type="button" id="buyerBtn">Show saved buyer card</button>
+        <label>
+          Anthropic API key
+          <input
+            id="apiKey"
+            type="password"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="Paste sk-ant-… here, then Save"
+          />
+        </label>
+        <p id="claudeStatus" class="settings-note">Claude is off. Paste your key above to turn it on for this test.</p>
+        <div class="settings-actions">
+          <button type="button" id="saveKeyBtn">Save key</button>
+          <button type="button" id="clearKeyBtn">Clear key</button>
+          <button type="button" id="newChatBtn">New chat</button>
+          <button type="button" id="buyerBtn">Show saved buyer card</button>
+        </div>
       </div>
 
       <section id="thread" class="thread" aria-live="polite"></section>
