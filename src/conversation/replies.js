@@ -24,7 +24,9 @@ export function buildConversationReply({
   handoffRequested = false,
   pendingOffer = null,
   unsure = [],
-  ack = null
+  ack = null,
+  lastAskedField = null,
+  updatedFields = []
 }) {
   const lines = [];
   const declineContact = intents.includes("decline_contact") || Boolean(buyer.contactDeclined);
@@ -121,7 +123,10 @@ export function buildConversationReply({
     });
     if (intro) lines.push(intro);
 
-    const followUp = buildContextualFollowUp(buyer, matches, packs);
+    const followUp = buildContextualFollowUp(buyer, matches, packs, {
+      lastAskedField,
+      updatedFields
+    });
     if (followUp.text) lines.push(followUp.text);
     nextQuestion = followUp.nextQuestion;
     nextPending = followUp.pendingOffer;
@@ -251,9 +256,17 @@ function buildUnsureFollowUp(buyer, unsureFields) {
   };
 }
 
-function buildContextualFollowUp(buyer, matches, packs) {
+function buildContextualFollowUp(buyer, matches, packs, { lastAskedField = null, updatedFields = [] } = {}) {
   const hasBeds = Boolean(buyer.bedrooms?.length);
   const beds = bedroomOptionsFromMatches(matches);
+  const justCorrectedCore = updatedFields.some((field) =>
+    ["budget", "area", "bedrooms"].includes(field)
+  );
+  const divertedFromCash =
+    !buyer.cashAvailableAed &&
+    (justCorrectedCore ||
+      (lastAskedField === "cashAvailableAed" &&
+        updatedFields.some((field) => ["budget", "area", "bedrooms", "financing"].includes(field))));
 
   if (!hasBeds && beds.length) {
     if (beds.length === 1) {
@@ -300,6 +313,23 @@ function buildContextualFollowUp(buyer, matches, packs) {
         clarifyPrompt: `Which size should I open: ${labels.join(" or ")}?`
       }
     };
+  }
+
+  // Buyer changed budget/area/beds this turn: show options first. Ask cash on a later turn.
+  if (divertedFromCash) {
+    if (!buyer.financing || buyer.financing === "unknown") {
+      const financing = choicesForField("financing");
+      return {
+        text: financing?.prompt || "Do you prefer cash, mortgage, or a payment plan?",
+        nextQuestion: {
+          field: "financing",
+          prompt: financing?.prompt || "Do you prefer cash, mortgage, or a payment plan?",
+          choices: financing?.choices || null
+        },
+        pendingOffer: null
+      };
+    }
+    return { text: null, nextQuestion: null, pendingOffer: null };
   }
 
   if (!buyer.cashAvailableAed) {

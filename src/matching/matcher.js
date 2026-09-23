@@ -61,8 +61,10 @@ export function matchCriteria(project, unit, criteria = {}) {
   }
 
   if (criteria.bedrooms !== null && criteria.bedrooms !== undefined && criteria.bedrooms !== "") {
-    const wanted = Number(criteria.bedrooms);
-    if (unit.bedrooms !== wanted) return reject(unit, project, "bedrooms");
+    const wantedList = Array.isArray(criteria.bedrooms)
+      ? criteria.bedrooms.map(Number)
+      : [Number(criteria.bedrooms)];
+    if (!wantedList.includes(unit.bedrooms)) return reject(unit, project, "bedrooms");
   }
 
   if (criteria.budgetAed !== null && criteria.budgetAed !== undefined) {
@@ -127,13 +129,18 @@ export function matchInventory(catalog, criteria = {}) {
 }
 
 export function criteriaFromBuyer(buyer) {
+  const beds = buyer.bedrooms?.length
+    ? buyer.bedrooms.length === 1
+      ? buyer.bedrooms[0]
+      : [...buyer.bedrooms]
+    : null;
   return {
     emirate: buyer.preferredEmirate || "Abu Dhabi",
     area: buyer.preferredAreas?.[0] || null,
     developer: buyer.developerInterest || null,
     project: buyer.projectInterest || null,
     propertyType: buyer.propertyTypes?.[0] || null,
-    bedrooms: buyer.bedrooms?.[0] ?? null,
+    bedrooms: beds,
     budgetAed: buyer.budgetAed ?? null,
     cashAvailableAed: buyer.cashAvailableAed ?? null,
     paymentPlanRequired: buyer.financing === "payment_plan"

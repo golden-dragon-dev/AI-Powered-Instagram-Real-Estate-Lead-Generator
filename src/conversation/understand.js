@@ -11,11 +11,13 @@ const DEFAULT_MODEL = "claude-sonnet-4-20250514";
 const UNDERSTAND_SYSTEM = [
   "You extract structured buyer requirements from Abu Dhabi off-plan property chat.",
   "Return ONLY valid JSON with this shape:",
-  '{"facts":{"budget":number|null,"cash":number|null,"area":string|null,"areas":string[]|null,"bedrooms":number|null,"propertyType":string|null,"developer":string|null,"project":string|null,"financing":"cash"|"mortgage"|"payment_plan"|null,"useType":"investment"|"end_use"|null,"contactDeclined":boolean|null,"openToOtherAreas":boolean|null},"unsure":string[],"intents":string[],"signals":string[],"ack":string|null}',
+  '{"facts":{"budget":number|null,"cash":number|null,"area":string|null,"areas":string[]|null,"bedrooms":number|number[]|null,"propertyType":string|null,"developer":string|null,"project":string|null,"financing":"cash"|"mortgage"|"payment_plan"|null,"useType":"investment"|"end_use"|null,"contactDeclined":boolean|null,"openToOtherAreas":boolean|null},"unsure":string[],"intents":string[],"signals":string[],"ack":string|null}',
   "Rules:",
-  "- Convert money to AED numbers. around/about/roughly 2M → 2000000. 300k → 300000.",
+  "- Convert money to AED numbers. around/about/roughly 2M → 2000000. 300k → 300000. no more than 150k down → cash 150000.",
   "- bedrooms studio → 0. Corrections like actually make that 2 bedrooms replace bedrooms.",
+  "- If buyer says 1 or 2 bed / 1 or 2 bedrooms, set bedrooms to [1,2].",
   "- Areas: Yas Island, Saadiyat Island, Hudayriyat Island, Al Reem Island when clear.",
+  "- If buyer says forget Yas / switch to Reem, set area to the new area only (Al Reem Island), not Yas.",
   "- If buyer says not sure / unsure / idk about a field, put that field name in unsure (budget, cash, area, bedrooms, financing) and leave facts for that field null.",
   "- If open to other areas while preferring one, set area plus openToOtherAreas true.",
   "- intents may include greet, unsure, search, correction, decline_contact, high_intent, reserve, viewing, ask_facts, continue, start_fresh.",
@@ -149,6 +151,29 @@ export function understandMessageLocally(message, { buyer = null, lastAskedField
     signals.push("area_flexible");
   }
 
+  if (/\b(?:forget|ignore)\s+(?:about\s+)?(yas|hudayriyat|saadiyat|reem)\b/i.test(text)) {
+    intents.push("correction");
+    const nextArea = text.match(/\b(?:what about|how about|switch to|try)\s+(yas|hudayriyat|saadiyat|reem)(?:\s+island)?\b/i);
+    if (nextArea) {
+      const key = nextArea[1].toLowerCase();
+      const map = {
+        yas: "Yas Island",
+        hudayriyat: "Hudayriyat Island",
+        saadiyat: "Saadiyat Island",
+        reem: "Al Reem Island"
+      };
+      facts.area = map[key];
+      ack = ack || `Switching over to ${facts.area}.`;
+    }
+  }
+
+  const multiBeds = text.match(/\b(\d+)\s*(?:or|\/)\s*(\d+)\s*(?:br|bed)/i);
+  if (multiBeds) {
+    facts.bedrooms = [Number(multiBeds[1]), Number(multiBeds[2])].sort((a, b) => a - b);
+    intents.push("provide_facts");
+    ack = ack || `Looking at ${facts.bedrooms.join(" or ")} bedroom options.`;
+  }
+
   return normalizeUnderstanding({ facts, unsure, intents, signals, ack }, "local");
 }
 
@@ -171,7 +196,11 @@ export function mergeUnderstanding(baseExtract, understanding) {
     if (!facts.area) facts.area = facts.areas[0];
   }
   if (rawFacts.bedrooms !== null && rawFacts.bedrooms !== undefined) {
-    facts.bedrooms = normalizeBedrooms(rawFacts.bedrooms);
+    if (Array.isArray(rawFacts.bedrooms)) {
+      facts.bedrooms = rawFacts.bedrooms.map(normalizeBedrooms).filter((n) => n !== null);
+    } else {
+      facts.bedrooms = normalizeBedrooms(rawFacts.bedrooms);
+    }
   }
   if (rawFacts.propertyType) facts.propertyType = normalizePropertyType(rawFacts.propertyType);
   if (rawFacts.developer) facts.developer = normalizeDeveloper(rawFacts.developer);
@@ -232,8 +261,13 @@ export function normalizeUnderstanding(raw, source = "none") {
     facts.areas = factsIn.areas.map(normalizeArea).filter(Boolean);
   }
   if (factsIn.bedrooms !== null && factsIn.bedrooms !== undefined) {
-    const beds = normalizeBedrooms(factsIn.bedrooms);
-    if (beds !== null) facts.bedrooms = beds;
+    if (Array.isArray(factsIn.bedrooms)) {
+      const beds = factsIn.bedrooms.map(normalizeBedrooms).filter((n) => n !== null);
+      if (beds.length) facts.bedrooms = beds.length === 1 ? beds[0] : beds;
+    } else {
+      const beds = normalizeBedrooms(factsIn.bedrooms);
+      if (beds !== null) facts.bedrooms = beds;
+    }
   }
   if (factsIn.propertyType) facts.propertyType = normalizePropertyType(factsIn.propertyType);
   if (factsIn.developer) facts.developer = normalizeDeveloper(factsIn.developer);

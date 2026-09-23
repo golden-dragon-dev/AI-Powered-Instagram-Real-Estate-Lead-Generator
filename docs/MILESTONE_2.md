@@ -88,7 +88,12 @@ Tapping a choice or typing the same words stores the same structured value.
 - Progressive qualification works with free text and quick replies
 - Buyer card keeps budget, cash, area, and bedrooms across turns
 - Bedroom corrections replace the old value
+- Area corrections like `Forget Yas / What about Reem` replace the area
+- `1 or 2 bed` stores both sizes and matching accepts either
+- Mid-chat budget changes do not immediately repeat the cash question
 - Phone refusal stops contact prompts
 - Fact checker blocks invented commercial claims
 - Missing listing fields stay unanswered and do not hand off
 - Test chat runs without Instagram
+
+Correction regression suite: `docs/MILESTONE_2_CORRECTIONS.md`

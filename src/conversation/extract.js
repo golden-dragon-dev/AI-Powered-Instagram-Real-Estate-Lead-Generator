@@ -200,6 +200,16 @@ function extractBudget(text) {
 }
 
 function extractCash(text) {
+  const maxDown = text.match(
+    /\b(?:no more than|not more than|max(?:imum)?|up to|under|less than)\s*(?:AED|Dhs|Dh)?\s*(\d[\d,]*(?:\.\d+)?\s*[MmKk]?)\s*(?:down|deposit|initial|cash)?\b/i
+  ) || text.match(
+    /\b(?:don'?t|do not)\s+want\s+to\s+put\s+(?:more\s+than\s+)?(?:AED|Dhs|Dh)?\s*(\d[\d,]*(?:\.\d+)?\s*[MmKk]?)\s*(?:down|deposit)?\b/i
+  );
+  if (maxDown) {
+    const amount = parseMoney(maxDown[1]);
+    if (amount !== null && amount > 0) return amount;
+  }
+
   const patterns = [
     new RegExp(
       `(?:cash(?:\\s+available|\\s+ready)?|down\\s*payment|initial(?:\\s+payment)?|put\\s+down|deposit|ready\\s+now|have\\s+now)\\s*(?:of\\s*|about\\s*|around\\s*)?(?:AED|Dhs|Dh)?\\s*${MONEY_TOKEN}`,
@@ -224,16 +234,58 @@ function extractCash(text) {
 }
 
 function extractArea(text) {
+  const forgotten = [...text.matchAll(/\b(?:forget|ignore|skip|not|no more)\s+(?:about\s+)?(yas|hudayriyat|saadiyat|reem)(?:\s+island)?\b/gi)].map(
+    (m) => normalizeArea(AREA_LABELS[m[1].toLowerCase()] || m[1])
+  );
+
+  const preferred =
+    text.match(
+      /\b(?:what about|how about|switch to|change to|instead|look at|try|prefer)\s+(yas|hudayriyat|saadiyat|reem)(?:\s+island)?\b/i
+    ) ||
+    text.match(/\b(yas|hudayriyat|saadiyat|reem)(?:\s+island)?\s+(?:instead|please)\b/i);
+
+  if (preferred) {
+    const raw = preferred[1] || preferred[0];
+    const key = String(raw).toLowerCase().replace(/\s+island$/, "").trim();
+    const area = normalizeArea(AREA_LABELS[key] || raw);
+    if (area && !forgotten.includes(area)) return area;
+  }
+
+  const found = [];
   for (const pattern of AREA_PATTERNS) {
     const match = text.match(pattern);
     if (!match) continue;
     const key = match[0].toLowerCase().replace(/\s+/g, " ").trim();
-    return normalizeArea(AREA_LABELS[key] || match[0]);
+    const area = normalizeArea(AREA_LABELS[key] || match[0]);
+    if (area && !forgotten.includes(area)) found.push(area);
   }
-  return null;
+
+  if (!found.length) return null;
+  // If an area was forgotten and another remains, prefer the other.
+  if (forgotten.length && found.length) return found[found.length - 1];
+  // Prefer the last mentioned area when several appear (corrections often trail).
+  return found[found.length - 1];
 }
 
+/**
+ * Returns one bedroom count, or an array when the buyer accepts multiple sizes.
+ */
 function extractBedrooms(text) {
+  const multi = text.match(
+    /\b(?:studio|\d+)\s*(?:br|bed(?:room)?s?)?\s*(?:or|\/|,|and)\s*(?:studio|\d+)\s*(?:br|bed(?:room)?s?)?\b/i
+  );
+  if (multi) {
+    const beds = [];
+    if (/\bstudio\b/i.test(multi[0])) beds.push(0);
+    for (const part of multi[0].matchAll(/\b(\d+)\b/g)) {
+      const n = normalizeBedrooms(part[1]);
+      if (n !== null) beds.push(n);
+    }
+    const unique = [...new Set(beds)].sort((a, b) => a - b);
+    if (unique.length > 1) return unique;
+    if (unique.length === 1) return unique[0];
+  }
+
   const change = text.match(
     /\b(?:actually|instead|change(?:\s+to)?|make that|update(?:\s+to)?|switch(?:\s+to)?)\b[\s\w,]{0,40}?\b(?:studio|(\d+)\s*(?:br|bed(?:room)?s?))\b/i
   );
@@ -241,7 +293,7 @@ function extractBedrooms(text) {
     if (/studio/i.test(change[0]) && !change[1]) return 0;
     if (change[1]) return normalizeBedrooms(change[1]);
   }
-  if (/\bstudio\b/i.test(text)) return 0;
+  if (/\bstudio\b/i.test(text) && !/\b\d+\s*(?:br|bed)/i.test(text)) return 0;
   const match = text.match(/\b(\d+)\s*(?:br|bed(?:room)?s?)\b/i);
   if (match) return normalizeBedrooms(match[1]);
   return null;

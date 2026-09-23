@@ -66,6 +66,12 @@ export class ConversationEngine {
 
     const merged = mergeUnderstanding(base, understanding);
     let { facts, signals, intents, unsure, ack } = merged;
+    const updatedFields = [];
+    if (facts.budget !== undefined) updatedFields.push("budget");
+    if (facts.cash !== undefined) updatedFields.push("cash");
+    if (facts.area || facts.areas) updatedFields.push("area");
+    if (facts.bedrooms !== undefined) updatedFields.push("bedrooms");
+    if (facts.financing) updatedFields.push("financing");
 
     const pendingOffer = this.memory.getPendingOffer(instagramUserId);
     if (isAffirmation(text) && pendingOffer) {
@@ -135,7 +141,9 @@ export class ConversationEngine {
       handoffRequested,
       pendingOffer: this.memory.getPendingOffer(instagramUserId),
       unsure,
-      ack
+      ack,
+      lastAskedField,
+      updatedFields
     });
 
     if (draft.pendingOffer) {

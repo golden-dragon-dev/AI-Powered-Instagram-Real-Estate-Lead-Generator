@@ -131,33 +131,36 @@ export function explainSoftMismatches(buyer, matches, mode = "exact", relaxed = 
   if (mode === "exact" || !matches.length) return [];
 
   const notes = [];
-  const wantedBeds = buyer.bedrooms?.[0];
+  const wantedBeds = [...(buyer.bedrooms || [])].map(Number).filter((n) => Number.isFinite(n));
   const offeredBeds = [...new Set(matches.map((row) => row.unit.bedrooms))].sort((a, b) => a - b);
+  const wantedPhrase = wantedBeds.map(bedroomPhrase).join(" or ");
+  const overlap = wantedBeds.filter((beds) => offeredBeds.includes(beds));
 
-  if (
-    (relaxed.includes("bedrooms") || mode !== "exact") &&
-    wantedBeds !== null &&
-    wantedBeds !== undefined &&
-    !offeredBeds.includes(wantedBeds)
-  ) {
+  if (wantedBeds.length && offeredBeds.length && overlap.length === 0) {
     const offered = offeredBeds.map(bedroomPhrase);
     const offeredText =
       offered.length === 1
         ? offered[0]
         : `${offered.slice(0, -1).join(", ")} and ${offered.at(-1)}`;
     notes.push(
-      `You asked for ${bedroomPhrase(wantedBeds)}. This is not an exact match. The closest confirmed options here are ${offeredText}.`
+      `You asked for ${wantedPhrase}. This is not an exact match. The closest confirmed options here are ${offeredText}.`
     );
+  } else if (wantedBeds.length > 1 && overlap.length && overlap.length < wantedBeds.length) {
+    const missing = wantedBeds.filter((beds) => !offeredBeds.includes(beds)).map(bedroomPhrase);
+    if (missing.length) {
+      notes.push(
+        `You asked for ${wantedPhrase}. Confirmed options here cover ${overlap.map(bedroomPhrase).join(" and ")}, but not ${missing.join(" and ")}.`
+      );
+    }
   } else if (
-    wantedBeds !== null &&
-    wantedBeds !== undefined &&
+    wantedBeds.length === 1 &&
     offeredBeds.length &&
-    !offeredBeds.every((beds) => beds === wantedBeds)
+    !offeredBeds.every((beds) => beds === wantedBeds[0])
   ) {
-    const other = offeredBeds.filter((beds) => beds !== wantedBeds).map(bedroomPhrase);
+    const other = offeredBeds.filter((beds) => beds !== wantedBeds[0]).map(bedroomPhrase);
     if (other.length) {
       notes.push(
-        `You asked for ${bedroomPhrase(wantedBeds)}. Some confirmed options nearby are ${other.join(" and ")}, so this is not an exact bedroom match.`
+        `You asked for ${bedroomPhrase(wantedBeds[0])}. Some confirmed options nearby are ${other.join(" and ")}, so this is not an exact bedroom match.`
       );
     }
   }
