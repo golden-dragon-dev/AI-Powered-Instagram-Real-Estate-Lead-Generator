@@ -111,6 +111,12 @@ export function detectIntents(message) {
   if (/^\s*(hi|hello|hey|good\s+(morning|afternoon|evening)|salam|assalam)/i.test(message)) {
     intents.push("greet");
   }
+  if (/\b(start\s+fresh|start\s+over|new\s+search|reset\s+(my\s+)?search)\b/i.test(text)) {
+    intents.push("start_fresh");
+  }
+  if (/^(continue|continue\s+please|pick\s+up|keep\s+going)([.!]?)$/i.test(text.trim())) {
+    intents.push("continue");
+  }
   if (/\b(thank|thanks|thx)\b/i.test(text)) intents.push("thanks");
   if (
     /\b(price|cost|how much|starting from|handover|availability|sold out)\b/i.test(text) ||

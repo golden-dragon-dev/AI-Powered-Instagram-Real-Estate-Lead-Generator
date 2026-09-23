@@ -80,6 +80,14 @@ export function resolveAffirmation(pendingOffer, message) {
     };
   }
 
+  if (pendingOffer.type === "session_choice") {
+    return {
+      facts: {},
+      clearPending: true,
+      clarify: null
+    };
+  }
+
   if (pendingOffer.type === "show_options") {
     return {
       facts: {},

@@ -54,6 +54,16 @@ export class ConversationEngine {
       this.memory.setPendingOffer(instagramUserId, null);
     }
 
+    if (intents.includes("continue") || intents.includes("start_fresh")) {
+      this.memory.setPendingOffer(instagramUserId, null);
+    }
+
+    if (intents.includes("start_fresh")) {
+      await this.buyers.resetCriteria(instagramUserId);
+      this.memory.clear(instagramUserId);
+      facts = {};
+    }
+
     let buyer = await this.buyers.remember(instagramUserId, facts);
     if (facts.bedrooms !== undefined || facts.project || facts.area) {
       // Concrete choice made; drop stale pending offer

@@ -4,9 +4,26 @@ const messageInput = document.getElementById("message");
 const userIdInput = document.getElementById("userId");
 const choicesEl = document.getElementById("choices");
 const buyerBtn = document.getElementById("buyerBtn");
+const newChatBtn = document.getElementById("newChatBtn");
 const buyerPanel = document.getElementById("buyerPanel");
 const settings = document.getElementById("settings");
 const settingsToggle = document.getElementById("settingsToggle");
+
+const SESSION_KEY = "harbour_desk_test_user";
+
+function newSessionId() {
+  return `ig_web_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function ensureSessionId() {
+  let id = localStorage.getItem(SESSION_KEY);
+  if (!id) {
+    id = newSessionId();
+    localStorage.setItem(SESSION_KEY, id);
+  }
+  userIdInput.value = id;
+  return id;
+}
 
 function addBubble(role, text, meta = "") {
   const row = document.createElement("div");
@@ -26,6 +43,13 @@ function addBubble(role, text, meta = "") {
 
   thread.appendChild(row);
   thread.scrollTop = thread.scrollHeight;
+}
+
+function clearThread() {
+  thread.innerHTML = "";
+  choicesEl.innerHTML = "";
+  choicesEl.hidden = true;
+  buyerPanel.hidden = true;
 }
 
 function renderChoices(nextQuestion) {
@@ -48,7 +72,8 @@ function renderChoices(nextQuestion) {
 }
 
 async function sendMessage(text) {
-  const userId = userIdInput.value.trim() || "ig_web_demo";
+  const userId = userIdInput.value.trim() || ensureSessionId();
+  localStorage.setItem(SESSION_KEY, userId);
   addBubble("you", text);
   messageInput.value = "";
   choicesEl.hidden = true;
@@ -73,6 +98,18 @@ async function sendMessage(text) {
   renderChoices(data.nextQuestion);
 }
 
+function startFreshUi() {
+  const id = newSessionId();
+  localStorage.setItem(SESSION_KEY, id);
+  userIdInput.value = id;
+  clearThread();
+  addBubble(
+    "bot",
+    "Hi. I can help with Abu Dhabi listings from the approved list.\n\nShare a budget, area, or bedroom count whenever you are ready."
+  );
+  messageInput.focus();
+}
+
 settingsToggle.addEventListener("click", () => {
   const open = settings.hasAttribute("hidden");
   if (open) {
@@ -92,13 +129,18 @@ form.addEventListener("submit", (event) => {
 });
 
 buyerBtn.addEventListener("click", async () => {
-  const userId = userIdInput.value.trim() || "ig_web_demo";
+  const userId = userIdInput.value.trim() || ensureSessionId();
   const response = await fetch(`/api/buyer?userId=${encodeURIComponent(userId)}`);
   const data = await response.json();
   buyerPanel.hidden = false;
   buyerPanel.textContent = JSON.stringify(data.buyer, null, 2);
 });
 
+if (newChatBtn) {
+  newChatBtn.addEventListener("click", () => startFreshUi());
+}
+
+ensureSessionId();
 addBubble(
   "bot",
   "Hi. I can help with Abu Dhabi listings from the approved list.\n\nShare a budget, area, or bedroom count whenever you are ready."

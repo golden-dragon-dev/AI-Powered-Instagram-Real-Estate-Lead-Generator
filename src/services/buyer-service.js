@@ -117,6 +117,22 @@ export class BuyerService {
     return this.store.saveBuyer(merged);
   }
 
+  /** Clear search criteria so a buyer can start a new enquiry on the same IG id. */
+  async resetCriteria(instagramUserId) {
+    const existing = await this.getOrCreate(instagramUserId);
+    const blank = emptyBuyer(instagramUserId);
+    const next = {
+      ...blank,
+      name: existing.name,
+      phone: existing.phone,
+      contactDeclined: existing.contactDeclined,
+      createdAt: existing.createdAt || nowIso(),
+      updatedAt: nowIso(),
+      lastSeenAt: nowIso()
+    };
+    return this.store.saveBuyer(next);
+  }
+
   missingQualificationFields(buyer) {
     const missing = [];
     if (!hasValue(buyer.budgetAed)) missing.push("budgetAed");

@@ -67,8 +67,11 @@ export function renderProjectIntro({ buyer, packs, mode = "exact", mismatches = 
       : projectNames.slice(0, 2).join(" and ");
   const verb = projectNames.length === 1 ? "is" : "are";
 
+  // Soft opener only when we can name the gap; otherwise it reads like a false miss.
+  const softWithGap = mode !== "exact" && mismatches.length > 0;
+
   let opener;
-  if (mode === "exact") {
+  if (!softWithGap) {
     if (budget && area) {
       opener = `${budget} opens a few doors on ${area}. ${lead} ${verb} worth a look.`;
     } else if (area) {

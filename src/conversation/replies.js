@@ -5,6 +5,13 @@ import { renderProjectIntro } from "./project-copy.js";
 import { nextQualificationQuestion, isCoreQualified } from "./qualify.js";
 import { choicesForField } from "./choices.js";
 
+/** Pure greeting with no other request in the same message. */
+export function isGreetingOnly(message) {
+  return /^\s*(hi|hello|hey|good\s+(morning|afternoon|evening)|salam|assalamu?\s*alaikum)[!?.]*\s*$/i.test(
+    String(message || "")
+  );
+}
+
 export function buildConversationReply({
   buyer,
   message = "",
@@ -22,6 +29,16 @@ export function buildConversationReply({
   let nextPending = null;
   let nextQuestion = null;
 
+  if (intents.includes("start_fresh")) {
+    lines.push("Fresh start. What budget are you working with?");
+    nextQuestion = {
+      field: "budgetAed",
+      prompt: "What budget are you working with?",
+      choices: null
+    };
+    return finish(lines, "qualifying", nextQuestion, null);
+  }
+
   if (intents.includes("greet")) {
     lines.push("Hi. Happy to help with Abu Dhabi off-plan options.");
   }
@@ -33,6 +50,30 @@ export function buildConversationReply({
   }
   if ((handoffRequested || highIntent) && !declineContact) {
     lines.push("I can flag this for an advisor while we stay with confirmed figures.");
+  }
+
+  // "Hi" alone must not dump a soft match from an earlier test session.
+  if (isGreetingOnly(message) && intents.includes("greet") && !intents.includes("continue")) {
+    if (canPitchBuyer(buyer) || Boolean(buyer.projectInterest)) {
+      lines.push("Want to continue with your last search, or start fresh?");
+      nextQuestion = {
+        field: "session_choice",
+        prompt: "Want to continue with your last search, or start fresh?",
+        choices: [
+          { id: "continue", label: "Continue", value: "Continue" },
+          { id: "start_fresh", label: "Start fresh", value: "Start fresh" }
+        ]
+      };
+      nextPending = { type: "session_choice" };
+      return finish(lines, "welcome_back", nextQuestion, nextPending);
+    }
+    lines.push("What budget are you working with?");
+    nextQuestion = {
+      field: "budgetAed",
+      prompt: "What budget are you working with?",
+      choices: null
+    };
+    return finish(lines, "qualifying", nextQuestion, null);
   }
 
   if (isAffirmation(message) && pendingOffer) {
