@@ -346,6 +346,57 @@ body {
   transform: translateY(1px);
 }
 
+.call-request {
+  margin: 0 14px 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(24, 78, 91, 0.22);
+  border-radius: 12px;
+  background: var(--accent-soft);
+}
+
+.call-request[hidden] {
+  display: none;
+}
+
+.call-request strong {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.call-request p {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.call-request-row {
+  display: flex;
+  gap: 8px;
+}
+
+.call-request-row input {
+  flex: 1;
+  min-width: 0;
+  height: 42px;
+  border: 1px solid rgba(28, 38, 44, 0.18);
+  border-radius: 10px;
+  padding: 0 12px;
+  font: inherit;
+}
+
+.call-request-row button {
+  border: 0;
+  border-radius: 10px;
+  height: 42px;
+  padding: 0 14px;
+  background: var(--accent);
+  color: #f7fbfc;
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
 .composer {
   display: flex;
   align-items: center;

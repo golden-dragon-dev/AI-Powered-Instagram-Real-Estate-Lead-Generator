@@ -66,9 +66,11 @@ step("5. Hallucinated price is blocked", async (ctx) => {
   assert(check.ok === false, "hallucinated claim was allowed");
 });
 
-step("6. High intent sets lead status without inventing facts", async (ctx) => {
+step("6. High intent stays in AI until Request a Call is submitted", async (ctx) => {
   const result = await ctx.engine.handleMessage("ig_v2_1", "I want to reserve");
-  assert(result.buyer.leadStatus === "high_intent", "lead status not high_intent");
+  assert(result.buyer.leadStatus === "engaged", "high intent must stay engaged, not a handoff lead");
+  assert(result.alertRecommended === false, "high intent must not alert before phone submit");
+  assert(result.callRequest?.offered === true, "reserve interest should offer Request a Call");
   assert(result.check.ok, "high intent reply failed fact check");
   assert(result.handoffRequired === false, "missing data must not force CRM handoff");
 });

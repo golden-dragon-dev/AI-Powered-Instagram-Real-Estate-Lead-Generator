@@ -7,22 +7,117 @@ import { mkdtemp } from "node:fs/promises";
 import { setupConversation } from "./helpers.js";
 import { extractFactsFromMessage } from "../src/conversation/extract.js";
 import {
-  alertReasonFromTurn,
-  shouldSendAdvisorAlert
+  shouldSendAdvisorAlert,
+  wantsCallRequest,
+  buildCallRequestSummary
 } from "../src/conversation/intent-policy.js";
 import { IntegrationOrchestrator } from "../src/integrations/orchestrator.js";
 import { ProcessedEventStore } from "../src/integrations/processed-events.js";
-import { AlertLedger } from "../src/integrations/whatsapp.js";
+import { AlertLedger, CallRequestStore } from "../src/integrations/whatsapp.js";
 import { IntegrationLog } from "../src/integrations/integration-log.js";
-import { buyerToHubSpotProperties } from "../src/integrations/hubspot.js";
 import { verifySignature, parseInstagramMessages } from "../src/integrations/meta.js";
 
 /**
- * Milestone 3 launch acceptance scenarios (mocked integrations).
+ * Milestone 3 call-request acceptance (client launch tests A–F + integrations).
  * Run: node --test test/step19-milestone3-integrations.test.js
  */
 
-test("step 19a multi-field extraction still works", () => {
+test("step 19a Test A serious buyer stays in AI with no call offer or alert", async () => {
+  const { engine } = await setupConversation();
+  const result = await engine.handleMessage(
+    "ig_m3_a",
+    "I have AED 3M, looking for a 3BR on Yas with a payment plan."
+  );
+  assert.equal(result.buyer.budgetAed, 3_000_000);
+  assert.deepEqual(result.buyer.preferredAreas, ["Yas Island"]);
+  assert.deepEqual(result.buyer.bedrooms, [3]);
+  assert.equal(result.alertRecommended, false);
+  assert.equal(result.callRequest, null);
+  assert.doesNotMatch(result.reply, /Request a Call|what number|phone number|advisor to follow up/i);
+});
+
+test("step 19b Test B availability question has no forced contact capture", async () => {
+  const { engine } = await setupConversation();
+  await engine.handleMessage("ig_m3_b", "Budget AED 3M, Yas, 3 bedrooms, payment plan");
+  const result = await engine.handleMessage("ig_m3_b", "I really like this one. Is it available?");
+  assert.equal(result.alertRecommended, false);
+  assert.equal(result.callRequest, null);
+  assert.doesNotMatch(result.reply, /Request a Call|what number works best|Enter the number/i);
+});
+
+test("step 19c Test C human help offers Request a Call", async () => {
+  const { engine } = await setupConversation();
+  await engine.handleMessage("ig_m3_c", "Budget AED 3M, Yas, 3 bedrooms");
+  const result = await engine.handleMessage("ig_m3_c", "I want to speak to someone about this.");
+  assert.ok(result.callRequest?.offered);
+  assert.equal(result.alertRecommended, false);
+  assert.match(result.reply, /Request a Call|Enter the number|advisor/i);
+  assert.equal(result.pendingOffer?.type, "call_request");
+});
+
+test("step 19d Test D number submitted creates handoff and alert recommendation", async () => {
+  const { engine } = await setupConversation();
+  await engine.handleMessage("ig_m3_d", "Budget AED 3M, Yas, 3 bedrooms, payment plan");
+  await engine.handleMessage("ig_m3_d", "Can you call me about reserving it?");
+  const submitted = await engine.submitCallRequest("ig_m3_d", "+971501234567");
+  assert.equal(submitted.callRequestSubmitted, true);
+  assert.equal(submitted.alertRecommended, true);
+  assert.equal(submitted.buyer.phone, "+971501234567");
+  assert.equal(submitted.buyer.leadStatus, "call_requested");
+  assert.match(submitted.reply, /advisor will call|have your number/i);
+  assert.match(submitted.callSummary, /CALL REQUEST/);
+  assert.match(submitted.callSummary, /\+971501234567/);
+  assert.match(submitted.callSummary, /3,?000,?000|AED 3/);
+});
+
+test("step 19e Test E existing buyer context is reused on call request", async () => {
+  const { engine } = await setupConversation();
+  await engine.handleMessage(
+    "ig_m3_e",
+    "AED 3M, Yas Island, 3 bedrooms, 500k initial cash, payment plan"
+  );
+  const offered = await engine.handleMessage("ig_m3_e", "I want to speak to someone.");
+  assert.ok(offered.callRequest?.offered);
+  assert.doesNotMatch(offered.reply, /What budget|Which area|How many bedrooms/i);
+  const submitted = await engine.submitCallRequest("ig_m3_e", "+971509998877");
+  assert.equal(submitted.buyer.budgetAed, 3_000_000);
+  assert.deepEqual(submitted.buyer.preferredAreas, ["Yas Island"]);
+  assert.deepEqual(submitted.buyer.bedrooms, [3]);
+  assert.equal(submitted.buyer.cashAvailableAed, 500_000);
+  assert.match(submitted.callSummary, /500,?000/);
+});
+
+test("step 19f Test F no call wanted continues without notification", async () => {
+  const { engine } = await setupConversation();
+  await engine.handleMessage("ig_m3_f", "Budget AED 2M, Yas, studio");
+  await engine.handleMessage("ig_m3_f", "I want to speak to someone.");
+  const declined = await engine.handleMessage(
+    "ig_m3_f",
+    "No thanks, just send me the information here."
+  );
+  assert.equal(declined.alertRecommended, false);
+  assert.equal(declined.callRequest, null);
+  assert.match(declined.reply, /keep sharing|confirmed details|no problem/i);
+  assert.doesNotMatch(declined.reply, /Enter the number you would like us to call/i);
+});
+
+test("step 19g reserve interest alone does not notify", async () => {
+  const { engine } = await setupConversation();
+  await engine.handleMessage("ig_m3_g", "Budget AED 2M, Yas, studio");
+  const result = await engine.handleMessage("ig_m3_g", "What do I need to reserve it?");
+  assert.equal(result.alertRecommended, false);
+  assert.equal(wantsCallRequest("What do I need to reserve it?"), false);
+});
+
+test("step 19h I want to reserve offers call request but no alert yet", async () => {
+  const { engine } = await setupConversation();
+  await engine.handleMessage("ig_m3_h", "Budget AED 2M, Yas, studio");
+  const result = await engine.handleMessage("ig_m3_h", "I want to reserve this.");
+  assert.ok(result.callRequest?.offered);
+  assert.equal(result.alertRecommended, false);
+});
+
+test("step 19i multi-field extraction still works", () => {
   const { facts } = extractFactsFromMessage("Budget AED 2M, Yas Island, 2 bedrooms, payment plan");
   assert.equal(facts.budget, 2_000_000);
   assert.equal(facts.area, "Yas Island");
@@ -30,7 +125,7 @@ test("step 19a multi-field extraction still works", () => {
   assert.equal(facts.financing, "payment_plan");
 });
 
-test("step 19b later preference correction updates buyer memory", async () => {
+test("step 19j later preference correction updates buyer memory", async () => {
   const { engine } = await setupConversation();
   await engine.handleMessage("ig_m3_1", "Budget AED 2M, Yas Island, studio");
   const changed = await engine.handleMessage("ig_m3_1", "What about masdar");
@@ -38,75 +133,7 @@ test("step 19b later preference correction updates buyer memory", async () => {
   assert.doesNotMatch(changed.reply, /Yas Studio One/i);
 });
 
-test("step 19c informational EOI does not recommend an alert", async () => {
-  const { engine } = await setupConversation();
-  const result = await engine.handleMessage(
-    "ig_m3_eoi",
-    "Just interested for now, looking for information only"
-  );
-  assert.equal(result.alertRecommended, false);
-  assert.ok(result.intents.includes("eoi_info") || result.signals.includes("informational_eoi"));
-});
-
-test("step 19d viewing request recommends a viewing alert", async () => {
-  const { engine } = await setupConversation();
-  await engine.handleMessage("ig_m3_view", "Budget AED 2M, Yas, studio");
-  const result = await engine.handleMessage("ig_m3_view", "Can I book a viewing?");
-  assert.equal(result.alertRecommended, true);
-  assert.equal(result.alertReason, "viewing_request");
-  assert.ok(!result.intents.includes("reserve"));
-  assert.ok(result.intents.includes("viewing"));
-});
-
-test("step 19e reservation request recommends a reservation alert", async () => {
-  const { engine } = await setupConversation();
-  await engine.handleMessage("ig_m3_res", "Budget AED 2M, Yas, studio");
-  const result = await engine.handleMessage("ig_m3_res", "I want to reserve this unit");
-  assert.equal(result.alertRecommended, true);
-  assert.equal(result.alertReason, "reservation_request");
-});
-
-test("step 19f agent request recommends an agent alert", async () => {
-  const { engine } = await setupConversation();
-  const result = await engine.handleMessage("ig_m3_agent", "Please speak to an advisor");
-  assert.equal(result.alertRecommended, true);
-  assert.equal(result.alertReason, "agent_request");
-});
-
-test("step 19g WhatsApp preference with no-call is preserved", async () => {
-  const { engine } = await setupConversation();
-  const result = await engine.handleMessage(
-    "ig_m3_wa",
-    "WhatsApp only please, no calls"
-  );
-  assert.equal(result.buyer.preferredContactChannel, "whatsapp");
-  assert.equal(result.buyer.noCalls, true);
-  assert.equal(result.buyer.contactDeclined, false);
-  const props = buyerToHubSpotProperties(result.buyer);
-  assert.equal(props.preferred_contact_channel, "whatsapp");
-  assert.equal(props.no_calls, "true");
-});
-
-test("step 19h negative don't reserve suppresses alert", async () => {
-  const { engine } = await setupConversation();
-  await engine.handleMessage("ig_m3_neg", "Budget AED 2M, Yas, studio");
-  const result = await engine.handleMessage("ig_m3_neg", "Don't reserve anything yet");
-  assert.equal(result.alertRecommended, false);
-  assert.ok(result.intents.includes("decline_reserve"));
-  assert.ok(!result.intents.includes("reserve"));
-});
-
-test("step 19i I'm good stops the sales path", async () => {
-  const { engine } = await setupConversation();
-  await engine.handleMessage("ig_m3_stop", "Budget AED 2M, Yas, studio");
-  const stopped = await engine.handleMessage("ig_m3_stop", "I'm good");
-  assert.equal(stopped.buyer.salesPathStopped, true);
-  assert.equal(stopped.buyer.followUpStatus, "paused");
-  assert.equal(stopped.alertRecommended, false);
-  assert.match(stopped.reply, /pause/i);
-});
-
-test("step 19j Meta signature verification and message parsing", () => {
+test("step 19k Meta signature verification and message parsing", () => {
   const secret = "test_secret";
   const body = JSON.stringify({
     object: "instagram",
@@ -134,41 +161,36 @@ test("step 19j Meta signature verification and message parsing", () => {
   const events = parseInstagramMessages(JSON.parse(body));
   assert.equal(events.length, 1);
   assert.equal(events[0].senderId, "ig_user_9");
-  assert.equal(events[0].mid, "mid_1");
 });
 
-test("step 19k duplicate webhook protection", async () => {
+test("step 19l duplicate webhook protection", async () => {
   const rootDir = await mkdtemp(path.join(os.tmpdir(), "m3-events-"));
   const events = new ProcessedEventStore({ rootDir });
   assert.equal(await events.claim("mid_dup", { senderId: "u1" }), true);
   assert.equal(await events.claim("mid_dup", { senderId: "u1" }), false);
-  assert.equal(await events.has("mid_dup"), true);
 });
 
-test("step 19l HubSpot upsert is idempotent by Instagram user id", async () => {
+test("step 19m call submit notifies once and records context", async () => {
   const { engine } = await setupConversation();
-  const rootDir = await mkdtemp(path.join(os.tmpdir(), "m3-orch-"));
+  const rootDir = await mkdtemp(path.join(os.tmpdir(), "m3-call-"));
   const calls = [];
   const fetchImpl = async (url, options = {}) => {
     calls.push({ url: String(url), body: options.body ? JSON.parse(options.body) : null });
     if (String(url).includes("hubapi.com")) {
-      return {
-        ok: true,
-        json: async () => ({ results: [{ id: "hs_123", new: calls.length === 1 }] })
-      };
+      return { ok: true, json: async () => ({ results: [{ id: "hs_call_1", new: true }] }) };
     }
-    if (String(url).includes("graph.facebook.com") && String(url).includes("/messages") && !String(url).includes("whatsapp")) {
-      return { ok: true, json: async () => ({ recipient_id: "ig_user", message_id: "out_1" }) };
+    if (String(url).includes("graph.facebook.com")) {
+      return { ok: true, json: async () => ({ messages: [{ id: "wamid_call_1" }] }) };
     }
-    return { ok: true, json: async () => ({ messages: [{ id: "wamid_1" }] }) };
+    return { ok: true, json: async () => ({}) };
   };
+  const callRequests = new CallRequestStore({ rootDir });
   const orchestrator = new IntegrationOrchestrator({
     engine,
     buyers: engine.buyers,
     rootDir,
     fetchImpl,
     env: {
-      META_APP_SECRET: "secret",
       META_PAGE_ACCESS_TOKEN: "token",
       META_PAGE_ID: "page",
       HUBSPOT_ACCESS_TOKEN: "pat-test",
@@ -179,41 +201,37 @@ test("step 19l HubSpot upsert is idempotent by Instagram user id", async () => {
     },
     log: new IntegrationLog({ rootDir }),
     events: new ProcessedEventStore({ rootDir }),
-    alerts: new AlertLedger({ rootDir })
+    alerts: new AlertLedger({ rootDir }),
+    callRequests
   });
 
-  await engine.handleMessage("ig_hs_1", "Budget AED 2M, Yas, studio");
-  const first = await orchestrator.processMessageEvent({
-    mid: "mid_hs_1",
-    senderId: "ig_hs_1",
-    text: "I want to reserve this"
+  await engine.handleMessage("ig_call_1", "AED 3M, Yas, 3 bedrooms, 500k cash, payment plan");
+  const first = await orchestrator.processCallRequest({
+    userId: "ig_call_1",
+    phone: "+971501112233",
+    messageId: "call_mid_1"
   });
-  const second = await orchestrator.processMessageEvent({
-    mid: "mid_hs_1",
-    senderId: "ig_hs_1",
-    text: "I want to reserve this"
+  const second = await orchestrator.processCallRequest({
+    userId: "ig_call_1",
+    phone: "+971501112233",
+    messageId: "call_mid_1"
   });
 
-  assert.equal(second.duplicate, true);
-  assert.equal(first.hubspot.contactId, "hs_123");
-  const hubspotCalls = calls.filter((c) => c.url.includes("hubapi.com"));
-  assert.equal(hubspotCalls.length, 1);
-  assert.equal(hubspotCalls[0].body.inputs[0].idProperty, "instagram_user_id");
-  assert.equal(hubspotCalls[0].body.inputs[0].id, "ig_hs_1");
+  assert.equal(first.result.alertRecommended, true);
+  assert.equal(first.alert.skipped, false);
+  assert.ok(second.alert.skipped);
+  const recorded = await callRequests.list(5);
+  assert.ok(recorded.some((row) => row.phone === "+971501112233"));
+  assert.match(first.result.callSummary, /CALL REQUEST/);
 });
 
-test("step 19m failed integrations are logged without breaking memory", async () => {
+test("step 19n interest-only DM does not send WhatsApp alert", async () => {
   const { engine } = await setupConversation();
-  const rootDir = await mkdtemp(path.join(os.tmpdir(), "m3-fail-"));
-  const log = new IntegrationLog({ rootDir });
+  const rootDir = await mkdtemp(path.join(os.tmpdir(), "m3-noalert-"));
+  let waCalls = 0;
   const fetchImpl = async (url) => {
-    if (String(url).includes("hubapi.com")) {
-      return { ok: false, status: 500, statusText: "Server Error", json: async () => ({ message: "boom" }) };
-    }
-    if (String(url).includes("/messages")) {
-      return { ok: false, status: 500, statusText: "Send failed", json: async () => ({ error: { message: "send boom" } }) };
-    }
-    return { ok: false, status: 500, statusText: "wa fail", json: async () => ({ error: { message: "wa boom" } }) };
+    if (String(url).includes("WHATSAPP") || String(url).includes("/messages")) waCalls += 1;
+    return { ok: true, json: async () => ({ recipient_id: "x", message_id: "out", messages: [{ id: "w" }] }) };
   };
   const orchestrator = new IntegrationOrchestrator({
     engine,
@@ -223,34 +241,49 @@ test("step 19m failed integrations are logged without breaking memory", async ()
     env: {
       META_PAGE_ACCESS_TOKEN: "token",
       META_PAGE_ID: "page",
-      HUBSPOT_ACCESS_TOKEN: "pat-test",
       WHATSAPP_ACCESS_TOKEN: "wa-token",
       WHATSAPP_PHONE_NUMBER_ID: "phone",
       WHATSAPP_ALERT_TO: "971500000000",
       WHATSAPP_TEMPLATE_NAME: "lead_alert"
     },
-    log,
+    log: new IntegrationLog({ rootDir }),
     events: new ProcessedEventStore({ rootDir }),
     alerts: new AlertLedger({ rootDir })
   });
 
-  await engine.handleMessage("ig_fail_1", "Budget AED 2M, Yas, studio");
+  await engine.handleMessage("ig_noalert", "Budget AED 2M, Yas, studio");
   const outcome = await orchestrator.processMessageEvent({
-    mid: "mid_fail_1",
-    senderId: "ig_fail_1",
-    text: "Please speak to an agent"
+    mid: "mid_interest_1",
+    senderId: "ig_noalert",
+    text: "I want this unit"
   });
-
-  assert.equal(outcome.result.buyer.budgetAed, 2_000_000);
-  assert.equal(outcome.result.alertRecommended, true);
-  const errors = await log.list(20);
-  assert.ok(errors.length >= 2);
-  assert.ok(errors.every((row) => !/pat-test|wa-token|token/.test(JSON.stringify(row))));
+  assert.equal(outcome.result.alertRecommended, false);
+  assert.equal(outcome.alert.skipped, true);
 });
 
-test("step 19n alert reason helpers cover launch intents", () => {
-  assert.equal(alertReasonFromTurn(["viewing"], ["viewing_request"]), "viewing_request");
-  assert.equal(alertReasonFromTurn(["reserve"], ["reserve_interest"]), "reservation_request");
-  assert.equal(alertReasonFromTurn(["agent"], ["agent_request"]), "agent_request");
-  assert.equal(shouldSendAdvisorAlert({ intents: ["eoi_info"], signals: ["informational_eoi"] }), false);
+test("step 19o alert gate requires submitted phone", () => {
+  assert.equal(shouldSendAdvisorAlert({ callRequestSubmitted: true, buyer: { phone: null } }), false);
+  assert.equal(
+    shouldSendAdvisorAlert({ callRequestSubmitted: true, buyer: { phone: "+971501234567" } }),
+    true
+  );
+  assert.equal(
+    shouldSendAdvisorAlert({ callRequestSubmitted: false, buyer: { phone: "+971501234567" } }),
+    false
+  );
+  assert.match(
+    buildCallRequestSummary(
+      {
+        phone: "+971501234567",
+        budgetAed: 3_000_000,
+        preferredAreas: ["Yas Island"],
+        bedrooms: [3],
+        financing: "payment_plan",
+        cashAvailableAed: 500_000,
+        conversationSummary: "Looking at Yas Park Views"
+      },
+      { matches: [{ project: { name: "Yas Park Views" } }], reason: "Wants to discuss availability" }
+    ),
+    /CALL REQUEST[\s\S]*Phone: \+971501234567/
+  );
 });

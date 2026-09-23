@@ -1,13 +1,13 @@
 import { IntegrationLog } from "./integration-log.js";
 import { ProcessedEventStore } from "./processed-events.js";
-import { AlertLedger, sendWhatsAppAlert } from "./whatsapp.js";
+import { AlertLedger, CallRequestStore, sendWhatsAppAlert } from "./whatsapp.js";
 import { upsertHubSpotContact } from "./hubspot.js";
 import { parseInstagramMessages, sendInstagramText, verifySignature, verifyWebhookChallenge } from "./meta.js";
 import { runtimeRoot } from "./json-store.js";
 
 /**
- * Milestone 3 orchestrator: webhook -> engine -> HubSpot -> IG reply -> WhatsApp alert.
- * Integration failures are isolated and logged; buyer memory from the engine stays intact.
+ * Milestone 3 orchestrator: webhook -> engine -> HubSpot -> IG reply.
+ * WhatsApp alerts fire only after Request a Call + phone submit.
  */
 export class IntegrationOrchestrator {
   constructor({
@@ -18,7 +18,8 @@ export class IntegrationOrchestrator {
     rootDir = null,
     log = null,
     events = null,
-    alerts = null
+    alerts = null,
+    callRequests = null
   } = {}) {
     if (!engine) throw new Error("IntegrationOrchestrator requires engine");
     this.engine = engine;
@@ -29,6 +30,7 @@ export class IntegrationOrchestrator {
     this.log = log || new IntegrationLog({ rootDir: this.rootDir });
     this.events = events || new ProcessedEventStore({ rootDir: this.rootDir });
     this.alerts = alerts || new AlertLedger({ rootDir: this.rootDir });
+    this.callRequests = callRequests || new CallRequestStore({ rootDir: this.rootDir });
     this.queue = Promise.resolve();
   }
 
@@ -48,7 +50,6 @@ export class IntegrationOrchestrator {
     }
 
     const messages = parseInstagramMessages(payload);
-    // Acknowledge Meta quickly; process asynchronously on a single queue.
     this.queue = this.queue.then(() => this.#processMessages(messages)).catch(async (error) => {
       await this.log.record({
         integration: "orchestrator",
@@ -78,8 +79,8 @@ export class IntegrationOrchestrator {
       });
 
       const hubspot = await this.#safeHubSpot(result, event);
-      const send = await this.#safeInstagramSend(event.senderId, result.reply, mid);
-      const alert = await this.#safeWhatsAppAlert(result, event);
+      const send = await this.#safeInstagramSend(event.senderId, result.reply, mid, result.callRequest);
+      const alert = await this.#safeCallRequestAlert(result, event);
 
       await this.events.complete(mid, {
         hubspotContactId: hubspot.contactId || null,
@@ -110,6 +111,14 @@ export class IntegrationOrchestrator {
     }
   }
 
+  async processCallRequest({ userId, phone, messageId = null, useLlm = false } = {}) {
+    const result = await this.engine.submitCallRequest(userId, phone, { useLlm });
+    const event = { mid: messageId || `call_${userId}_${Date.now()}`, senderId: userId, text: "Request a Call" };
+    const hubspot = await this.#safeHubSpot(result, event);
+    const alert = await this.#safeCallRequestAlert(result, event);
+    return { result, hubspot, alert };
+  }
+
   async #processMessages(messages) {
     const outputs = [];
     for (const event of messages) {
@@ -124,7 +133,7 @@ export class IntegrationOrchestrator {
         buyer: result.buyer,
         matches: result.matches,
         lastMessage: event.text,
-        alertReason: result.alertReason,
+        alertReason: result.callRequestSubmitted ? "call_request" : null,
         env: this.env,
         fetchImpl: this.fetchImpl
       });
@@ -148,11 +157,15 @@ export class IntegrationOrchestrator {
     }
   }
 
-  async #safeInstagramSend(recipientId, text, mid) {
+  async #safeInstagramSend(recipientId, text, mid, callRequest = null) {
     try {
+      let outbound = text;
+      if (callRequest?.offered) {
+        outbound = `${text}\n\nRequest a Call: reply with the phone number you want us to use.`;
+      }
       return await sendInstagramText({
         recipientId,
-        text,
+        text: outbound,
         env: this.env,
         fetchImpl: this.fetchImpl
       });
@@ -170,16 +183,25 @@ export class IntegrationOrchestrator {
     }
   }
 
-  async #safeWhatsAppAlert(result, event) {
-    if (!result.alertRecommended || !result.alertReason) {
-      return { skipped: true, reason: "not_recommended" };
+  async #safeCallRequestAlert(result, event) {
+    if (!result.callRequestSubmitted || !result.alertRecommended || !result.buyer?.phone) {
+      return { skipped: true, reason: "not_a_submitted_call_request" };
     }
+
     try {
+      await this.callRequests.record({
+        instagramUserId: result.buyer.instagramUserId,
+        phone: result.buyer.phone,
+        summary: result.callSummary,
+        match: result.matches?.[0]?.project?.name || null
+      });
+
       const alert = await sendWhatsAppAlert({
         buyer: result.buyer,
-        reason: result.alertReason,
+        reason: "call_request",
         matchName: result.matches?.[0]?.project?.name || "",
         messageId: event.mid,
+        summaryText: result.callSummary || "",
         env: this.env,
         fetchImpl: this.fetchImpl,
         ledger: this.alerts
@@ -190,18 +212,18 @@ export class IntegrationOrchestrator {
           lastAlertAt: new Date().toISOString()
         });
       }
-      return alert;
+      return { ...alert, recorded: true };
     } catch (error) {
       await this.log.record({
         correlationId: event.mid,
         integration: "whatsapp",
-        operation: "alert",
+        operation: "call_request_alert",
         status: "error",
         message: error.message,
         retryable: Boolean(error.retryable),
-        meta: { reason: result.alertReason }
+        meta: { phone: result.buyer.phone }
       });
-      return { skipped: true, error: error.message };
+      return { skipped: true, error: error.message, recorded: true };
     }
   }
 }

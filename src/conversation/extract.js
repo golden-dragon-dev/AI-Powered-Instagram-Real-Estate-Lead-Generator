@@ -157,19 +157,18 @@ export function detectIntents(message) {
     (/\b(book|booking)\b/i.test(text) && !viewingMention);
   if (reserveMention) {
     intents.push("reserve");
-    intents.push("high_intent");
   }
   if (viewingMention) {
     intents.push("viewing");
-    intents.push("high_intent");
   }
   if (/\b(call me|callback|phone me|whatsapp me|contact me)\b/i.test(text)) {
     intents.push("callback");
-    intents.push("high_intent");
   }
   if (/\b(agent|human|advisor|speak to|talk to (a |an )?(person|someone|sales))\b/i.test(text)) {
     intents.push("agent");
-    intents.push("high_intent");
+  }
+  if (/\b(i want to buy|ready to buy|want this unit|buy this)\b/i.test(text)) {
+    intents.push("search");
   }
   if (/\b(yes|yeah|yep|yup|sure|ok|okay|sounds good|go ahead)\b/i.test(text) && text.length < 40) {
     intents.push("affirm");

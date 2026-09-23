@@ -5,6 +5,9 @@ const userIdInput = document.getElementById("userId");
 const apiKeyInput = document.getElementById("apiKey");
 const claudeStatus = document.getElementById("claudeStatus");
 const choicesEl = document.getElementById("choices");
+const callRequestEl = document.getElementById("callRequest");
+const callPhoneInput = document.getElementById("callPhone");
+const callSubmitBtn = document.getElementById("callSubmit");
 const buyerBtn = document.getElementById("buyerBtn");
 const newChatBtn = document.getElementById("newChatBtn");
 const saveKeyBtn = document.getElementById("saveKeyBtn");
@@ -53,7 +56,27 @@ function clearThread() {
   thread.innerHTML = "";
   choicesEl.innerHTML = "";
   choicesEl.hidden = true;
+  hideCallRequest();
   buyerPanel.hidden = true;
+}
+
+function hideCallRequest() {
+  if (!callRequestEl) return;
+  callRequestEl.hidden = true;
+  if (callPhoneInput) callPhoneInput.value = "";
+}
+
+function renderCallRequest(callRequest) {
+  if (!callRequestEl) return;
+  if (!callRequest?.offered) {
+    hideCallRequest();
+    return;
+  }
+  callRequestEl.hidden = false;
+  if (callPhoneInput) {
+    callPhoneInput.value = callRequest.phone || "";
+    callPhoneInput.focus();
+  }
 }
 
 function renderChoices(nextQuestion) {
@@ -139,6 +162,36 @@ async function sendMessage(text) {
 
   addBubble("bot", data.reply, metaParts.join(" · "));
   renderChoices(data.nextQuestion);
+  renderCallRequest(data.callRequest);
+}
+
+async function submitCallRequest() {
+  const userId = userIdInput.value.trim() || ensureSessionId();
+  const phone = (callPhoneInput?.value || "").trim();
+  if (!phone) {
+    addBubble("bot", "Enter a phone number first, then tap Request Call.");
+    return;
+  }
+
+  addBubble("you", `Request Call · ${phone}`);
+  const response = await fetch("/api/call-request", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ userId, phone })
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    addBubble("bot", data.error || "Call request failed");
+    return;
+  }
+
+  hideCallRequest();
+  choicesEl.hidden = true;
+  addBubble(
+    "bot",
+    data.reply,
+    data.alertRecommended ? "call requested · advisor notified" : "call requested"
+  );
 }
 
 function startFreshUi() {
@@ -171,6 +224,12 @@ form.addEventListener("submit", (event) => {
   if (!text) return;
   sendMessage(text).catch((error) => addBubble("bot", error.message || String(error)));
 });
+
+if (callSubmitBtn) {
+  callSubmitBtn.addEventListener("click", () => {
+    submitCallRequest().catch((error) => addBubble("bot", error.message || String(error)));
+  });
+}
 
 buyerBtn.addEventListener("click", async () => {
   const userId = userIdInput.value.trim() || ensureSessionId();

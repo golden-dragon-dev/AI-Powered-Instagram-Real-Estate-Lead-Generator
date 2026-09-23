@@ -22,6 +22,7 @@ export function buildConversationReply({
   mismatches = [],
   highIntent = false,
   handoffRequested = false,
+  offerCallRequest = false,
   pendingOffer = null,
   unsure = [],
   ack = null,
@@ -29,9 +30,10 @@ export function buildConversationReply({
   updatedFields = []
 }) {
   const lines = [];
-  const declineContact = intents.includes("decline_contact") || Boolean(buyer.contactDeclined);
+  const declineContact = intents.includes("decline_contact") || intents.includes("decline_call") || Boolean(buyer.contactDeclined);
   let nextPending = null;
   let nextQuestion = null;
+  let callRequest = null;
 
   if (intents.includes("start_fresh")) {
     lines.push("Fresh start. What budget are you working with?");
@@ -43,14 +45,8 @@ export function buildConversationReply({
     return finish(lines, "qualifying", nextQuestion, null);
   }
 
-  if (intents.includes("stop_sales")) {
-    lines.push("Understood. I will pause the sales follow-up. Message me any time if you want to look again.");
-    return finish(lines, "paused", null, null);
-  }
-
-  if (buyer.salesPathStopped && !intents.includes("search") && !intents.includes("provide_facts") && !intents.includes("continue")) {
-    lines.push("Happy to stay available if you want confirmed details later.");
-    return finish(lines, "paused", null, null);
+  if (intents.includes("decline_call")) {
+    lines.push("No problem. I can keep sharing confirmed details here.");
   }
 
   if (intents.includes("greet")) {
@@ -59,17 +55,50 @@ export function buildConversationReply({
   if (intents.includes("thanks")) {
     lines.push("Glad to help.");
   }
-  if (intents.includes("decline_contact")) {
+  if (intents.includes("decline_contact") && !intents.includes("decline_call")) {
     lines.push("No problem. We can keep looking without a phone number.");
   }
   if (ack) {
     lines.push(ack);
   }
-  if ((handoffRequested || highIntent) && !declineContact && !intents.includes("eoi_info")) {
-    lines.push("I can flag this for an advisor while we stay with confirmed figures.");
-  }
   if (intents.includes("decline_reserve")) {
     lines.push("No reservation on my side. We can keep reviewing confirmed options.");
+  }
+
+  // Explicit human help → Request a Call with phone input. No alert until submitted.
+  if (offerCallRequest && !declineContact && !intents.includes("call_submitted")) {
+    if (buyer.phone) {
+      lines.push(
+        "I can put in a call request with the number I already have on file. Use Request a Call below to confirm, or send a different number."
+      );
+    } else {
+      lines.push("I can connect you with an advisor. Enter the number you would like us to call, then tap Request Call.");
+    }
+    callRequest = {
+      offered: true,
+      title: "Request a Call",
+      prompt: "Enter the number you would like us to call:",
+      submitLabel: "Request Call",
+      phone: buyer.phone || null
+    };
+    nextPending = { type: "call_request", reason: "buyer_requested_human_help" };
+    nextQuestion = {
+      field: "phone",
+      prompt: "Enter the number you would like us to call:",
+      choices: null,
+      inputType: "tel"
+    };
+    // Still allow property context in the same turn when we already have matches.
+    if ((canPitchBuyer(buyer) || Boolean(buyer.projectInterest)) && packs.length) {
+      const intro = renderProjectIntro({
+        buyer,
+        packs,
+        mode: matchMode,
+        mismatches
+      });
+      if (intro) lines.unshift(intro);
+    }
+    return finish(lines, "call_offer", nextQuestion, nextPending, callRequest);
   }
 
   // "Hi" alone must not dump a soft match from an earlier test session.
@@ -143,24 +172,6 @@ export function buildConversationReply({
     if (followUp.text) lines.push(followUp.text);
     nextQuestion = followUp.nextQuestion;
     nextPending = followUp.pendingOffer;
-
-    if (highIntent && !declineContact) {
-      if (buyer.preferredContactChannel === "whatsapp" || buyer.noCalls) {
-        lines.push(
-          buyer.noCalls
-            ? "I will note WhatsApp as the preferred contact and keep calls off."
-            : "I will note WhatsApp as the preferred contact."
-        );
-      } else {
-        const contact = nextQualificationQuestion(buyer, { includeContact: true });
-        if (contact) {
-          lines.push(softContactPrompt(contact));
-          nextQuestion = contact;
-        }
-      }
-    } else if (highIntent && declineContact) {
-      lines.push("I can keep sharing confirmed details here.");
-    }
 
     return finish(lines, matchMode === "exact" ? "matched" : "soft_match", nextQuestion, nextPending);
   }
@@ -434,18 +445,13 @@ function buildContextualFollowUp(buyer, matches, packs, { lastAskedField = null,
   return { text: null, nextQuestion: null, pendingOffer: null };
 }
 
-function softContactPrompt(contact) {
-  if (contact.field === "phone") return "If you want an advisor to follow up, what number works best?";
-  if (contact.field === "name") return "What name should I put on the enquiry?";
-  return contact.prompt;
-}
-
-function finish(lines, stage, nextQuestion, pendingOffer) {
+function finish(lines, stage, nextQuestion, pendingOffer, callRequest = null) {
   return {
     text: lines.filter(Boolean).join("\n\n"),
     stage,
     nextQuestion: nextQuestion || null,
     pendingOffer: pendingOffer || null,
+    callRequest: callRequest || null,
     handoffRequired: false
   };
 }

@@ -9,19 +9,20 @@ import { understandMessageWithModel, understandMessageLocally, mergeUnderstandin
 import { isAffirmation, resolveAffirmation } from "./affirmation.js";
 import { retrieveFacts } from "../facts/retrieval.js";
 import {
-  alertReasonFromTurn,
-  hasAlertableIntent,
+  buildCallRequestSummary,
+  hasBuyingInterest,
   refineTurnIntent,
-  shouldSendAdvisorAlert
+  shouldSendAdvisorAlert,
+  wantsCallRequest
 } from "./intent-policy.js";
 
 function hasHighIntent(intents, signals = []) {
-  return hasAlertableIntent(intents, signals);
+  return hasBuyingInterest(intents, signals);
 }
 
-function leadStatusFor(buyer, intents, signals, matchCount) {
-  if (intents.includes("stop_sales") || buyer.salesPathStopped) return "paused";
-  if (hasHighIntent(intents, signals)) return "high_intent";
+function leadStatusFor(buyer, intents, signals, matchCount, callRequestSubmitted = false) {
+  if (callRequestSubmitted && buyer.phone) return "call_requested";
+  if (hasHighIntent(intents, signals)) return "engaged";
   if (matchCount > 0 && isCoreQualified(buyer)) return "qualified";
   if (canPitchBuyer(buyer)) return "engaged";
   if (buyer.budgetAed || buyer.preferredAreas?.length) return "engaged";
@@ -83,6 +84,31 @@ export class ConversationEngine {
       if (!facts.followUpStatus) facts.followUpStatus = "none";
     }
 
+    if (intents.includes("decline_call")) {
+      facts.salesPathStopped = false;
+      facts.followUpStatus = "none";
+    }
+
+    let callRequestSubmitted = Boolean(options.callRequestSubmitted);
+    if (options.phone) {
+      facts.phone = options.phone;
+      callRequestSubmitted = true;
+      intents = [...new Set([...intents, "request_call", "call_submitted"])];
+      signals = [...new Set([...signals, "request_call", "call_submitted"])];
+    }
+
+    // Phone typed while a call request is pending counts as submission.
+    const pendingBefore = this.memory.getPendingOffer(instagramUserId);
+    if (
+      !callRequestSubmitted &&
+      pendingBefore?.type === "call_request" &&
+      facts.phone
+    ) {
+      callRequestSubmitted = true;
+      intents = [...new Set([...intents, "request_call", "call_submitted"])];
+      signals = [...new Set([...signals, "request_call", "call_submitted"])];
+    }
+
     const updatedFields = [];
     if (facts.budget !== undefined) updatedFields.push("budget");
     if (facts.cash !== undefined) updatedFields.push("cash");
@@ -104,7 +130,7 @@ export class ConversationEngine {
       this.memory.setPendingOffer(instagramUserId, null);
     }
 
-    if (intents.includes("continue") || intents.includes("start_fresh")) {
+    if (intents.includes("continue") || intents.includes("start_fresh") || intents.includes("decline_call")) {
       this.memory.setPendingOffer(instagramUserId, null);
     }
 
@@ -114,6 +140,7 @@ export class ConversationEngine {
       facts = {};
       unsure = [];
       ack = null;
+      callRequestSubmitted = false;
     }
 
     let buyer = await this.buyers.remember(instagramUserId, facts);
@@ -137,7 +164,10 @@ export class ConversationEngine {
 
     if (facts.bedrooms !== undefined || facts.project || facts.area) {
       if (facts.bedrooms !== undefined || facts.project) {
-        this.memory.setPendingOffer(instagramUserId, null);
+        const pending = this.memory.getPendingOffer(instagramUserId);
+        if (pending?.type !== "call_request") {
+          this.memory.setPendingOffer(instagramUserId, null);
+        }
       }
     }
     this.memory.addTurn(instagramUserId, {
@@ -148,31 +178,52 @@ export class ConversationEngine {
       understandingSource: understanding?.source || null
     });
 
-    const handoffRequested = intents.includes("agent") || Boolean(options.handoffRequested);
-    const highIntent = hasHighIntent(intents, signals) && !buyer.salesPathStopped && !intents.includes("stop_sales");
-    const alertReason = alertReasonFromTurn(intents, signals);
-    const alertRecommended = shouldSendAdvisorAlert({ intents, signals, buyer });
+    const handoffRequested = false;
+    const highIntent = hasHighIntent(intents, signals);
+    const offerCallRequest =
+      Boolean(options.offerCallRequest) ||
+      intents.includes("request_call") ||
+      wantsCallRequest(text);
+    const alertRecommended = shouldSendAdvisorAlert({
+      callRequestSubmitted,
+      buyer: { ...buyer, phone: facts.phone || buyer.phone }
+    });
+    const alertReason = alertRecommended ? "call_request" : null;
 
     const catalog = this.properties.catalog();
     const matchResult = resolveMatches(catalog, buyer);
     const packs = retrieveFacts(matchResult.matches);
 
-    let draft = buildConversationReply({
-      buyer,
-      message: text,
-      intents,
-      packs,
-      matches: matchResult.matches,
-      matchMode: matchResult.mode,
-      mismatches: matchResult.mismatches || [],
-      highIntent,
-      handoffRequested,
-      pendingOffer: this.memory.getPendingOffer(instagramUserId),
-      unsure,
-      ack,
-      lastAskedField,
-      updatedFields
-    });
+    let draft;
+    if (callRequestSubmitted && (facts.phone || buyer.phone)) {
+      draft = {
+        text: `Thanks. I have your number${facts.phone || buyer.phone ? ` (${facts.phone || buyer.phone})` : ""}. An advisor will call you back. I have not promised a specific time.`,
+        stage: "call_requested",
+        nextQuestion: null,
+        pendingOffer: null,
+        callRequest: null,
+        handoffRequired: false
+      };
+      this.memory.setPendingOffer(instagramUserId, null);
+    } else {
+      draft = buildConversationReply({
+        buyer,
+        message: text,
+        intents,
+        packs,
+        matches: matchResult.matches,
+        matchMode: matchResult.mode,
+        mismatches: matchResult.mismatches || [],
+        highIntent,
+        handoffRequested,
+        offerCallRequest,
+        pendingOffer: this.memory.getPendingOffer(instagramUserId),
+        unsure,
+        ack,
+        lastAskedField,
+        updatedFields
+      });
+    }
 
     if (draft.pendingOffer) {
       this.memory.setPendingOffer(instagramUserId, draft.pendingOffer);
@@ -215,32 +266,45 @@ export class ConversationEngine {
       draft = { ...draft, text: replyText, stage: "fact_check_fallback", polished: false };
     }
 
-    const status = leadStatusFor(buyer, intents, signals, matchResult.matchCount);
+    const status = leadStatusFor(buyer, intents, signals, matchResult.matchCount, callRequestSubmitted);
     const summary = this.memory.buildSummary(instagramUserId, {
       ...buyer,
       conversationSummary: summarizeBuyer(buyer)
     });
 
-    const followUpStatus = intents.includes("stop_sales")
-      ? "paused"
-      : alertRecommended && !buyer.contactDeclined
-        ? "pending_advisor"
-        : buyer.followUpStatus === "paused" && !buyer.salesPathStopped
-          ? "none"
-          : buyer.followUpStatus || "none";
+    const followUpStatus = callRequestSubmitted
+      ? "call_requested"
+      : intents.includes("decline_call")
+        ? "none"
+        : offerCallRequest && !callRequestSubmitted
+          ? "call_offer_pending"
+          : buyer.followUpStatus === "call_requested"
+            ? buyer.followUpStatus
+            : buyer.followUpStatus === "paused"
+              ? "none"
+              : buyer.followUpStatus || "none";
 
-    // Current-turn signals replace sticky high-intent flags so old reserve/viewing
-    // requests do not keep firing alerts after the buyer declines or stops.
     const durableSignals = (signals || []).filter(
-      (signal) => !["high_intent", "reserve_interest", "viewing_request", "callback_request", "agent_request"].includes(signal)
+      (signal) =>
+        ![
+          "high_intent",
+          "reserve_interest",
+          "viewing_request",
+          "callback_request",
+          "agent_request",
+          "request_call",
+          "call_submitted"
+        ].includes(signal)
     );
 
     buyer = await this.buyers.remember(instagramUserId, {
       intentSignals: durableSignals,
-      contactDeclined: intents.includes("decline_contact") ? true : undefined,
+      contactDeclined:
+        intents.includes("decline_contact") || intents.includes("decline_call") ? true : undefined,
       preferredContactChannel: facts.preferredContactChannel,
       noCalls: facts.noCalls,
-      salesPathStopped: facts.salesPathStopped
+      salesPathStopped: false,
+      phone: facts.phone
     });
     buyer = await this.buyers.replaceIntentSignals(instagramUserId, [
       ...durableSignals,
@@ -252,8 +316,15 @@ export class ConversationEngine {
       followUpStatus,
       preferredContactChannel: facts.preferredContactChannel || buyer.preferredContactChannel,
       noCalls: facts.noCalls === true ? true : buyer.noCalls,
-      salesPathStopped: facts.salesPathStopped === true ? true : Boolean(buyer.salesPathStopped && !buyerWouldResume(facts, intents))
+      salesPathStopped: false
     });
+
+    const callSummary = callRequestSubmitted
+      ? buildCallRequestSummary(buyer, {
+          matches: matchResult.matches,
+          reason: options.callReason || "Buyer submitted Request a Call"
+        })
+      : null;
 
     this.memory.addTurn(instagramUserId, {
       role: "assistant",
@@ -276,6 +347,9 @@ export class ConversationEngine {
       unsure,
       alertReason,
       alertRecommended,
+      callRequest: draft.callRequest || null,
+      callRequestSubmitted,
+      callSummary,
       criteria: matchResult.criteria,
       matchCount: matchResult.matchCount,
       matchMode: matchResult.mode,
@@ -286,11 +360,21 @@ export class ConversationEngine {
       packs,
       check,
       missingData: missingDataHandoff(packs),
-      handoffRequired: check.handoffRequired,
+      handoffRequired: Boolean(callRequestSubmitted),
       nextQuestion: draft.nextQuestion || null,
       pendingOffer: this.memory.getPendingOffer(instagramUserId),
       context: this.memory.recentContext(instagramUserId)
     };
+  }
+
+  async submitCallRequest(instagramUserId, phone, options = {}) {
+    return this.handleMessage(instagramUserId, options.message || "Request a Call", {
+      ...options,
+      phone: String(phone || "").trim(),
+      callRequestSubmitted: true,
+      callReason: options.callReason || "Buyer submitted Request a Call",
+      useLlm: false
+    });
   }
 }
 

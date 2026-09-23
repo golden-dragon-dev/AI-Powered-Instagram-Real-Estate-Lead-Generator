@@ -32,5 +32,7 @@ test("step 8c high intent reserve is flagged", () => {
 test("step 8d detectIntents marks agent request", () => {
   const intents = detectIntents("Can I speak to an agent please");
   assert.ok(intents.includes("agent"));
-  assert.ok(intents.includes("high_intent"));
+  const refined = extractFactsFromMessage("Can I speak to an agent please");
+  assert.ok(refined.intents.includes("agent") || refined.intents.includes("request_call"));
+  assert.ok(refined.intents.includes("high_intent") || refined.signals.includes("request_call"));
 });

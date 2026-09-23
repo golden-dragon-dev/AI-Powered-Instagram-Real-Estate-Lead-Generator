@@ -229,6 +229,9 @@ const server = http.createServer(async (req, res) => {
         followUpStatus: result.buyer.followUpStatus,
         alertRecommended: Boolean(result.alertRecommended),
         alertReason: result.alertReason || null,
+        callRequest: result.callRequest || null,
+        callRequestSubmitted: Boolean(result.callRequestSubmitted),
+        callSummary: result.callSummary || null,
         nextQuestion: result.nextQuestion,
         claudeUsed: Boolean(result.polished),
         claudeEnabled: Boolean(engine.llm?.apiKey),
@@ -241,6 +244,7 @@ const server = http.createServer(async (req, res) => {
           propertyTypes: result.buyer.propertyTypes,
           financing: result.buyer.financing,
           useType: result.buyer.useType,
+          phone: result.buyer.phone,
           contactDeclined: result.buyer.contactDeclined,
           preferredContactChannel: result.buyer.preferredContactChannel,
           noCalls: result.buyer.noCalls,
@@ -252,6 +256,42 @@ const server = http.createServer(async (req, res) => {
           bedrooms: row.bedroomLabel,
           price: row.unit.startingPriceAed
         }))
+      });
+    } catch (error) {
+      return sendJson(res, 500, { error: error.message || String(error) });
+    }
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/call-request") {
+    if (!ALLOW_TEST_CHAT) return sendJson(res, 404, { error: "Not found" });
+    try {
+      const body = await readJsonBody(req);
+      const userId = String(body.userId || "ig_web_demo").trim() || "ig_web_demo";
+      const phone = String(body.phone || "").trim();
+      if (!phone) return sendJson(res, 400, { error: "phone is required" });
+      const outcome = await orchestrator.processCallRequest({
+        userId,
+        phone,
+        useLlm: false
+      });
+      const result = outcome.result;
+      return sendJson(res, 200, {
+        reply: result.reply,
+        stage: result.stage,
+        alertRecommended: Boolean(result.alertRecommended),
+        callRequestSubmitted: true,
+        callSummary: result.callSummary || null,
+        notification: outcome.alert,
+        buyer: {
+          phone: result.buyer.phone,
+          budgetAed: result.buyer.budgetAed,
+          preferredAreas: result.buyer.preferredAreas,
+          bedrooms: result.buyer.bedrooms,
+          financing: result.buyer.financing,
+          cashAvailableAed: result.buyer.cashAvailableAed,
+          leadStatus: result.buyer.leadStatus,
+          followUpStatus: result.buyer.followUpStatus
+        }
       });
     } catch (error) {
       return sendJson(res, 500, { error: error.message || String(error) });

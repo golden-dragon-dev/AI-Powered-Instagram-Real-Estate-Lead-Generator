@@ -1,5 +1,6 @@
 import path from "node:path";
 import { JsonFileStore, runtimeRoot } from "./json-store.js";
+import { buildCallRequestSummary } from "../conversation/intent-policy.js";
 
 const DEFAULT_GRAPH_VERSION = "v21.0";
 
@@ -51,26 +52,42 @@ export class AlertLedger {
   }
 }
 
-export function buildAlertTemplateComponents({ buyer, reason, matchName = "" }) {
-  const channel =
-    buyer.preferredContactChannel === "whatsapp"
-      ? buyer.noCalls
-        ? "WhatsApp only, no calls"
-        : "WhatsApp preferred"
-      : buyer.noCalls
-        ? "No calls"
-        : "Standard contact";
+export class CallRequestStore {
+  constructor({ rootDir } = {}) {
+    this.store = new JsonFileStore(path.join(rootDir || runtimeRoot(), "call-requests.json"));
+  }
+
+  async record(entry) {
+    const row = {
+      at: new Date().toISOString(),
+      ...entry
+    };
+    await this.store.update((current) => {
+      const list = Array.isArray(current) ? current : [];
+      list.push(row);
+      return list.slice(-500);
+    }, []);
+    return row;
+  }
+
+  async list(limit = 50) {
+    const rows = await this.store.read([]);
+    return rows.slice(-limit);
+  }
+}
+
+export function buildAlertTemplateComponents({ buyer, reason, matchName = "", summaryText = "" }) {
   return [
     {
       type: "body",
       parameters: [
+        { type: "text", text: String(buyer.phone || "unknown").slice(0, 60) },
         { type: "text", text: String(buyer.instagramUserId || "unknown").slice(0, 60) },
-        { type: "text", text: String(reason || "high_intent").slice(0, 60) },
+        { type: "text", text: String(reason || "call_request").slice(0, 60) },
         { type: "text", text: String(matchName || buyer.projectInterest || "none").slice(0, 60) },
-        { type: "text", text: channel.slice(0, 60) },
         {
           type: "text",
-          text: String(buyer.conversationSummary || "No summary yet").slice(0, 120)
+          text: String(summaryText || buyer.conversationSummary || "No summary yet").slice(0, 120)
         }
       ]
     }
@@ -82,6 +99,7 @@ export async function sendWhatsAppAlert({
   reason,
   matchName = "",
   messageId = null,
+  summaryText = "",
   env = process.env,
   fetchImpl = fetch,
   ledger = null
@@ -95,29 +113,36 @@ export async function sendWhatsAppAlert({
     messageId
   });
   const alertLedger = ledger || new AlertLedger({ rootDir: runtimeRoot(env) });
-  const claimed = await alertLedger.mark(key, { reason, buyerId: buyer.instagramUserId });
+  const claimed = await alertLedger.mark(key, { reason, buyerId: buyer.instagramUserId, phone: buyer.phone });
   if (!claimed) {
     return { skipped: true, reason: "duplicate_alert", key };
   }
 
   const graphVersion = env.META_GRAPH_VERSION || DEFAULT_GRAPH_VERSION;
   const url = `${env.META_GRAPH_BASE_URL || "https://graph.facebook.com"}/${graphVersion}/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  const bodyPayload = {
+    messaging_product: "whatsapp",
+    to: String(env.WHATSAPP_ALERT_TO).replace(/\D/g, ""),
+    type: "template",
+    template: {
+      name: env.WHATSAPP_TEMPLATE_NAME,
+      language: { code: env.WHATSAPP_TEMPLATE_LANGUAGE || "en" },
+      components: buildAlertTemplateComponents({
+        buyer,
+        reason,
+        matchName,
+        summaryText: summaryText || buildCallRequestSummary(buyer, { reason })
+      })
+    }
+  };
+
   const response = await fetchImpl(url, {
     method: "POST",
     headers: {
       "content-type": "application/json",
       authorization: `Bearer ${env.WHATSAPP_ACCESS_TOKEN}`
     },
-    body: JSON.stringify({
-      messaging_product: "whatsapp",
-      to: String(env.WHATSAPP_ALERT_TO).replace(/\D/g, ""),
-      type: "template",
-      template: {
-        name: env.WHATSAPP_TEMPLATE_NAME,
-        language: { code: env.WHATSAPP_TEMPLATE_LANGUAGE || "en" },
-        components: buildAlertTemplateComponents({ buyer, reason, matchName })
-      }
-    })
+    body: JSON.stringify(bodyPayload)
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -131,6 +156,7 @@ export async function sendWhatsAppAlert({
   return {
     skipped: false,
     key,
-    wamid: body.messages?.[0]?.id || null
+    wamid: body.messages?.[0]?.id || null,
+    summary: summaryText || buildCallRequestSummary(buyer, { reason })
   };
 }

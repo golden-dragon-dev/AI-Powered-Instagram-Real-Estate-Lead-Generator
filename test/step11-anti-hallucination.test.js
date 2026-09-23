@@ -47,17 +47,20 @@ test("step 11c missing price project stays not confirmed", async () => {
   }
 });
 
-test("step 11d high intent does not invent numbers and asks contact when needed", async () => {
+test("step 11d high intent offers Request a Call without inventing numbers", async () => {
   const { engine } = await setupConversation();
   await engine.handleMessage(
     "ig_m2_fc4",
     "AED 3M, Yas, 3BR, 500k cash, payment plan"
   );
   const result = await engine.handleMessage("ig_m2_fc4", "I want to reserve this");
-  assert.ok(result.signals.includes("reserve_interest") || result.buyer.intentSignals.includes("reserve_interest"));
-  assert.equal(result.buyer.leadStatus, "high_intent");
+  assert.ok(result.signals.includes("reserve_interest") || result.intents.includes("request_call"));
+  assert.equal(result.buyer.leadStatus, "engaged");
+  assert.equal(result.alertRecommended, false);
+  assert.ok(result.callRequest?.offered);
   assert.ok(result.check.ok);
-  assert.match(result.reply, /name|phone|advisor|confirmed/i);
+  assert.match(result.reply, /Request a Call|number you would like us to call|advisor/i);
+  assert.doesNotMatch(result.reply, /AED\s*1,\d{3},\d{3}/);
 });
 
 test("step 11e reply builder never marks missing data as handoff", () => {
