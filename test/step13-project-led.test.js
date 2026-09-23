@@ -54,7 +54,7 @@ test("step 13f soft bedroom alternative states the bedroom gap clearly", async (
   // 3BR Yas Park Views is 2.6M so over 2M budget; soft path should offer 1/2BR and say 3BR does not match
   assert.ok(result.matchCount >= 1);
   if (result.matchMode !== "exact") {
-    assert.match(result.reply, /not an exact match/i);
+    assert.match(result.reply, /closest confirmed option|trade-off/i);
     assert.match(result.reply, /3 bedroom/i);
     assert.match(result.reply, /1 bedroom|2 bedroom/i);
   }

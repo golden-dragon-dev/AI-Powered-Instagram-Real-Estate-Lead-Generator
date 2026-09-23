@@ -44,6 +44,12 @@ export function isFeaturedProject(project, prefs = loadConversationPreferences()
 export function rankMatches(matches, prefs = loadConversationPreferences()) {
   const copy = [...matches];
   copy.sort((a, b) => {
+    const tierA = a.fit?.tierRank ?? 0;
+    const tierB = b.fit?.tierRank ?? 0;
+    if (tierA !== tierB) return tierB - tierA;
+    const scoreA = a.fit?.score ?? 0;
+    const scoreB = b.fit?.score ?? 0;
+    if (scoreA !== scoreB) return scoreB - scoreA;
     const featuredA = isFeaturedProject(a.project, prefs) ? 0 : 1;
     const featuredB = isFeaturedProject(b.project, prefs) ? 0 : 1;
     if (featuredA !== featuredB) return featuredA - featuredB;

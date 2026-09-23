@@ -9,8 +9,9 @@ function field(value) {
 }
 
 export function buildFactPack(match) {
-  const { project, unit, downPaymentAed, bedroomLabel } = match;
+  const { project, unit, downPaymentAed, bedroomLabel, fit = null } = match;
   return {
+    fit,
     projectId: project.id,
     unitId: unit.id,
     name: field(project.name),

@@ -16,6 +16,9 @@ function sizeLine(pack) {
 
 function unitLabel(pack) {
   if (pack.bedrooms?.value === 0) return "studio";
+  if (pack.bedrooms?.confirmed) {
+    return `${pack.bedrooms.value} bedroom ${pack.propertyType?.value || ""}`.trim();
+  }
   return `${pack.bedroomLabel?.value || ""} ${pack.propertyType?.value || ""}`.trim();
 }
 
@@ -66,6 +69,34 @@ export function renderProjectIntro({ buyer, packs, mode = "exact", mismatches = 
       ? projectNames[0]
       : projectNames.slice(0, 2).join(" and ");
   const verb = projectNames.length === 1 ? "is" : "are";
+  const primaryFit = packs[0]?.fit || null;
+
+  if (primaryFit) {
+    const matchedText = joinNatural(primaryFit.matched.slice(0, 4));
+    const compromiseText = primaryFit.compromises.map((row) => row.text).join(" ");
+    let opener;
+
+    if (primaryFit.tier === "exact") {
+      opener = matchedText
+        ? `${lead} ${verb} a strong fit for ${matchedText}.`
+        : `${lead} ${verb} a strong confirmed option.`;
+    } else if (primaryFit.tier === "strong_with_compromise") {
+      opener = matchedText
+        ? `${lead} ${verb} a strong fit for ${matchedText}.`
+        : `${lead} ${verb} a strong option based on what you shared.`;
+      if (compromiseText) opener += ` The compromise is on the financing side. ${compromiseText}`;
+    } else {
+      const optionWord = projectNames.length === 1 ? "option" : "options";
+      opener = matchedText
+        ? `${lead} ${verb} the closest confirmed ${optionWord} and fit ${matchedText}.`
+        : `${lead} ${verb} the closest confirmed ${optionWord}.`;
+      if (compromiseText) opener += ` The trade-off is clear. ${compromiseText}`;
+    }
+
+    return [opener, packs.slice(0, 3).map(renderProjectCard).join("\n\n")]
+      .filter(Boolean)
+      .join("\n\n");
+  }
 
   // Soft opener only when we can name the gap; otherwise it reads like a false miss.
   const softWithGap = mode !== "exact" && mismatches.length > 0;
@@ -97,4 +128,10 @@ export function renderProjectIntro({ buyer, packs, mode = "exact", mismatches = 
 
 export function renderFocusedFact(answerText) {
   return answerText;
+}
+
+function joinNatural(values) {
+  if (!values.length) return "";
+  if (values.length === 1) return values[0];
+  return `${values.slice(0, -1).join(", ")} and ${values.at(-1)}`;
 }

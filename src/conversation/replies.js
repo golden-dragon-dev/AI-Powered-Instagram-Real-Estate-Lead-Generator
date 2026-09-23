@@ -357,6 +357,38 @@ function buildContextualFollowUp(buyer, matches, packs, { lastAskedField = null,
     };
   }
 
+  const primaryFit = packs[0]?.fit;
+  if (primaryFit?.tier === "strong_with_compromise") {
+    const project = packs[0]?.name?.value || "this option";
+    const financeGap = primaryFit.compromises.some((row) =>
+      ["cash", "payment_plan"].includes(row.key)
+    );
+    return {
+      text: financeGap
+        ? `Would you like to explore ${project} despite the financing gap, or should I compare options with a lower initial payment?`
+        : `Would you like to explore ${project} despite that compromise, or compare another option?`,
+      nextQuestion: {
+        field: "tradeoff",
+        prompt: "Explore this option or compare alternatives?",
+        choices: null
+      },
+      pendingOffer: null
+    };
+  }
+
+  if (primaryFit?.tier === "nearby") {
+    const project = packs[0]?.name?.value || "this option";
+    return {
+      text: `Want to explore ${project} with that trade-off, or keep looking for a closer fit?`,
+      nextQuestion: {
+        field: "tradeoff",
+        prompt: "Explore this option or keep looking?",
+        choices: null
+      },
+      pendingOffer: null
+    };
+  }
+
   if (packs.length > 1 && isCoreQualified(buyer)) {
     const names = [...new Set(packs.map((pack) => pack.name.value))];
     if (names.length > 1) {

@@ -97,3 +97,5 @@ Tapping a choice or typing the same words stores the same structured value.
 - Test chat runs without Instagram
 
 Correction regression suite: `docs/MILESTONE_2_CORRECTIONS.md`
+
+Advisor fit / compromise gate: `docs/MILESTONE_2_ADVISOR_LOGIC.md`

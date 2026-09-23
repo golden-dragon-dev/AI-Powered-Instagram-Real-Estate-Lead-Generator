@@ -28,12 +28,27 @@ export async function polishReplyWithModel(client, { buyer, packs, draftText, in
     initialPayment: pack.downPaymentText.confirmed ? pack.downPaymentText.value : null,
     paymentPlan: pack.paymentPlanSummary.confirmed ? pack.paymentPlanSummary.value : null,
     handover: pack.handover.confirmed ? pack.handover.value : null,
-    availability: pack.availability.confirmed ? pack.availability.value : null
+    availability: pack.availability.confirmed ? pack.availability.value : null,
+    fit: pack.fit
+      ? {
+          tier: pack.fit.tier,
+          score: pack.fit.score,
+          matched: pack.fit.matched,
+          compromises: pack.fit.compromises.map((row) => ({
+            key: row.key,
+            text: row.text
+          }))
+        }
+      : null
   }));
 
   const system = [
-    "You help with Abu Dhabi property enquiries.",
-    "Rewrite the draft reply in short natural English.",
+    "You are a knowledgeable Abu Dhabi property advisor.",
+    "Rewrite the draft reply in short, natural, buyer-focused English without changing its recommendation logic.",
+    "For exact or strong_with_compromise options, lead with why the property fits before explaining the compromise.",
+    "Never say there is no exact match when fit.tier is strong_with_compromise.",
+    "For nearby options, state the useful fit and the trade-off without making a viable property sound unsuitable.",
+    "Preserve every stated compromise. Never hide a cash, budget, bedroom, area, or payment-plan gap.",
     "Use ONLY numbers, dates, plans, and availability from the provided fact packs.",
     "If a field is null, say it is not confirmed yet. Never invent prices.",
     "Do not add projects that are not in the fact packs.",

@@ -45,5 +45,11 @@ export {
   limitMatchesForPitch
 } from "./conversation/preferences.js";
 export { resolveMatches, canPitchBuyer, explainSoftMismatches } from "./conversation/match-resolve.js";
+export {
+  assessCandidate,
+  assessInventory,
+  bestRecommendableTier,
+  isStrongFitTier
+} from "./conversation/fit-assess.js";
 export { isAffirmation, resolveAffirmation } from "./conversation/affirmation.js";
 export { renderProjectIntro, renderProjectCard } from "./conversation/project-copy.js";

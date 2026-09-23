@@ -1,98 +1,46 @@
-import { criteriaFromBuyer, matchInventory } from "../matching/matcher.js";
+import { criteriaFromBuyer } from "../matching/matcher.js";
 import { limitMatchesForPitch } from "./preferences.js";
 import { formatAed } from "../matching/normalize.js";
+import { assessInventory, bestRecommendableTier } from "./fit-assess.js";
 
 /**
- * Project-led matching: try exact buyer criteria first, then useful softenings.
- * Always returns only inventory matches (confirmed rows). Soft preferences only rank.
+ * Project-led recommendation:
+ * 1. assess every active candidate against the buyer,
+ * 2. classify exact / strong-with-compromise / nearby / poor,
+ * 3. pitch only the best recommendable tier.
+ *
+ * This avoids turning a strong property with one financing compromise into a
+ * negative "no exact match" response.
  */
 export function resolveMatches(catalog, buyer) {
-  const base = criteriaFromBuyer(buyer);
-  const attempts = [
-    { mode: "exact", criteria: base, relaxed: [] },
-    {
-      mode: "without_bedrooms",
-      criteria: { ...base, bedrooms: null, propertyType: null },
-      relaxed: ["bedrooms"]
-    },
-    {
-      mode: "without_cash",
-      criteria: { ...base, cashAvailableAed: null },
-      relaxed: ["cash"]
-    },
-    {
-      mode: "budget_area_only",
-      criteria: {
-        emirate: base.emirate,
-        area: base.area,
-        project: base.project,
-        developer: base.developer,
-        budgetAed: base.budgetAed,
-        bedrooms: null,
-        propertyType: null,
-        cashAvailableAed: null,
-        paymentPlanRequired: false
-      },
-      relaxed: ["bedrooms", "cash", "payment_plan"]
-    }
-  ];
-
-  const flexibleArea =
-    Boolean(buyer.openToOtherAreas) ||
-    (buyer.intentSignals || []).includes("area_flexible");
-  if (flexibleArea && base.budgetAed) {
-    attempts.push({
-      mode: "budget_only_flexible_area",
-      criteria: {
-        emirate: base.emirate,
-        area: null,
-        project: base.project,
-        developer: base.developer,
-        budgetAed: base.budgetAed,
-        bedrooms: base.bedrooms,
-        propertyType: base.propertyType,
-        cashAvailableAed: base.cashAvailableAed,
-        paymentPlanRequired: base.paymentPlanRequired
-      },
-      relaxed: ["area"]
-    });
+  const criteria = criteriaFromBuyer(buyer);
+  if (!canPitchBuyer(buyer)) {
+    return emptyResult(criteria);
   }
 
-  const seen = new Set();
-  for (const attempt of attempts) {
-    const key = JSON.stringify(attempt.criteria);
-    if (seen.has(key)) continue;
-    seen.add(key);
+  const assessments = assessInventory(catalog, buyer);
+  const bestTier = bestRecommendableTier(assessments);
+  if (bestTier === "none") return emptyResult(criteria, assessments);
 
-    const allowEmirateOnly = attempt.relaxed.includes("area");
-    if (!canPitchWithCriteria(attempt.criteria, { allowEmirateOnly })) continue;
-
-    const result = matchInventory(catalog, attempt.criteria);
-    if (result.matchCount > 0) {
-      const pitched = limitMatchesForPitch(result.matches);
-      const mismatches = explainSoftMismatches(buyer, pitched, attempt.mode, attempt.relaxed);
-      return {
-        mode: attempt.mode,
-        criteria: attempt.criteria,
-        matches: pitched,
-        matchCount: pitched.length,
-        allMatches: result.matches,
-        rejected: result.rejected,
-        relaxed: attempt.relaxed,
-        mismatches
-      };
-    }
-  }
+  const tierMatches = assessments.filter((row) => row.fit.tier === bestTier);
+  const pitched = limitMatchesForPitch(tierMatches);
+  const compromises = pitched.flatMap((row) =>
+    row.fit.compromises.map((gap) => ({ ...gap, project: row.project.name }))
+  );
+  const mismatches = [...new Set(compromises.map((row) => row.text))];
 
   return {
-    mode: "none",
-    criteria: base,
-    matches: [],
-    matchCount: 0,
-    allMatches: [],
-    rejected: [],
-    relaxed: [],
-    mismatches: []
+    mode: bestTier,
+    fitTier: bestTier,
+    criteria,
+    matches: pitched,
+    matchCount: pitched.length,
+    allMatches: tierMatches,
+    assessments,
+    rejected: assessments.filter((row) => row.fit.tier === "poor"),
+    relaxed: [...new Set(compromises.map((row) => row.key))],
+    compromises,
+    mismatches
   };
 }
 
@@ -102,14 +50,20 @@ export function canPitchBuyer(buyer) {
   );
 }
 
-function canPitchWithCriteria(criteria, { allowEmirateOnly = false } = {}) {
-  return Boolean(
-    criteria.budgetAed &&
-      (criteria.area ||
-        criteria.project ||
-        criteria.developer ||
-        (allowEmirateOnly && criteria.emirate))
-  );
+function emptyResult(criteria, assessments = []) {
+  return {
+    mode: "none",
+    fitTier: "none",
+    criteria,
+    matches: [],
+    matchCount: 0,
+    allMatches: [],
+    assessments,
+    rejected: assessments,
+    relaxed: [],
+    compromises: [],
+    mismatches: []
+  };
 }
 
 export function bedroomOptionsFromMatches(matches) {

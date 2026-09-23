@@ -160,6 +160,7 @@ const server = http.createServer(async (req, res) => {
         reply: result.reply,
         stage: result.stage,
         matchCount: result.matchCount,
+        fitTier: result.fitTier,
         factCheckOk: result.check.ok,
         leadStatus: result.buyer.leadStatus,
         nextQuestion: result.nextQuestion,
