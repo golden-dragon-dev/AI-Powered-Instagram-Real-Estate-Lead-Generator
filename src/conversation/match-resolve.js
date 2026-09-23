@@ -1,5 +1,5 @@
 import { criteriaFromBuyer } from "../matching/matcher.js";
-import { limitMatchesForPitch } from "./preferences.js";
+import { limitMatchesForPitch, rankMatches } from "./preferences.js";
 import { formatAed } from "../matching/normalize.js";
 import { assessInventory, bestRecommendableTier } from "./fit-assess.js";
 
@@ -23,7 +23,13 @@ export function resolveMatches(catalog, buyer) {
   if (bestTier === "none") return emptyResult(criteria, assessments);
 
   const tierMatches = assessments.filter((row) => row.fit.tier === bestTier);
-  const pitched = limitMatchesForPitch(tierMatches);
+  const rankedTier = rankMatches(tierMatches);
+  // A compromise explanation must describe the same unit the buyer sees.
+  // Exact results may still show a small choice set; non-exact tiers get one hero.
+  const pitched =
+    bestTier === "exact"
+      ? limitMatchesForPitch(rankedTier)
+      : rankedTier.slice(0, 1);
   const compromises = pitched.flatMap((row) =>
     row.fit.compromises.map((gap) => ({ ...gap, project: row.project.name }))
   );

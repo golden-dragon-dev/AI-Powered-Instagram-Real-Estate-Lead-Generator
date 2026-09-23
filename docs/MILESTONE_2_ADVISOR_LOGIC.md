@@ -29,7 +29,8 @@ buyer message
   -> durable buyer memory
   -> deterministic candidate assessment
   -> exact / strong-with-compromise / nearby / poor
-  -> ranked confirmed Airtable candidates
+  -> rank by tier, score, gap count, and trade-off distance
+  -> one primary option for any non-exact recommendation
   -> balanced fit + compromise explanation
   -> optional Claude natural rewrite
   -> final commercial fact checker
@@ -50,6 +51,14 @@ Applicable buyer criteria are weighted:
 
 Scores are normalized over only the criteria the buyer actually supplied.
 
+Within the same tier and score, the system prefers fewer compromises and the
+smallest measurable gap. For example, AED 260k initial cash ranks above AED 800k
+when the buyer has AED 50k. Featured-project emphasis is applied only after fit.
+
+Exact results may show a small choice set. Strong-with-compromise and nearby
+results show one primary unit so the explanation and property card always refer
+to the same option.
+
 Classification rules:
 
 - No gaps: `exact`
@@ -67,7 +76,7 @@ Explicit project and developer requests are candidate gates. Inactive projects, 
 node --test test/step17-advisor-fit.test.js
 ```
 
-Expected: 6 tests pass.
+Expected: 7 tests pass.
 
 ### 2. Reem strong-fit scenario
 

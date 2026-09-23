@@ -240,10 +240,32 @@ function scoreDimensions(dimensions) {
   const possible = dimensions.reduce((sum, row) => sum + row.weight, 0);
   const earned = dimensions.reduce((sum, row) => {
     if (row.status === "matched") return sum + row.weight;
-    if (row.status === "unknown") return sum + row.weight * 0.25;
+    if (row.status === "unknown" && !row.core) return sum + row.weight * 0.25;
     return sum;
   }, 0);
   return Math.round((earned / possible) * 100);
+}
+
+function distancePenalty(dimensions) {
+  return dimensions.reduce((sum, row) => {
+    if (row.status === "matched") return sum;
+    if (row.status === "unknown") return sum + (row.core ? 25 : 5);
+    if (row.key === "bedrooms") {
+      const requested = Array.isArray(row.requested) ? row.requested : [row.requested];
+      const distance = Math.min(...requested.map((value) => Math.abs(Number(value) - Number(row.offered))));
+      return sum + distance * 10;
+    }
+    if (row.key === "budget" && row.requested > 0 && row.offered !== null) {
+      return sum + Math.max(0, ((row.offered - row.requested) / row.requested) * 100);
+    }
+    if (row.key === "cash" && row.requested > 0 && row.offered !== null) {
+      return sum + Math.max(0, ((row.offered - row.requested) / row.requested) * 10);
+    }
+    if (row.key === "area") return sum + 20;
+    if (row.key === "property_type") return sum + 15;
+    if (row.key === "payment_plan") return sum + 5;
+    return sum + 10;
+  }, 0);
 }
 
 export function assessCandidate(candidate, buyer) {
@@ -264,6 +286,7 @@ export function assessCandidate(candidate, buyer) {
       tier,
       tierRank: TIER_RANK[tier],
       score: scoreDimensions(dimensions),
+      distancePenalty: Math.round(distancePenalty(dimensions) * 100) / 100,
       dimensions,
       matched,
       compromises,
@@ -301,6 +324,12 @@ export function assessInventory(catalog, buyer) {
   assessments.sort((a, b) => {
     if (a.fit.tierRank !== b.fit.tierRank) return b.fit.tierRank - a.fit.tierRank;
     if (a.fit.score !== b.fit.score) return b.fit.score - a.fit.score;
+    if (a.fit.compromises.length !== b.fit.compromises.length) {
+      return a.fit.compromises.length - b.fit.compromises.length;
+    }
+    if (a.fit.distancePenalty !== b.fit.distancePenalty) {
+      return a.fit.distancePenalty - b.fit.distancePenalty;
+    }
     const priceA = a.unit.startingPriceAed ?? Number.MAX_SAFE_INTEGER;
     const priceB = b.unit.startingPriceAed ?? Number.MAX_SAFE_INTEGER;
     return priceA - priceB;

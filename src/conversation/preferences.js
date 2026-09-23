@@ -50,6 +50,12 @@ export function rankMatches(matches, prefs = loadConversationPreferences()) {
     const scoreA = a.fit?.score ?? 0;
     const scoreB = b.fit?.score ?? 0;
     if (scoreA !== scoreB) return scoreB - scoreA;
+    const gapsA = a.fit?.compromises?.length ?? 0;
+    const gapsB = b.fit?.compromises?.length ?? 0;
+    if (gapsA !== gapsB) return gapsA - gapsB;
+    const distanceA = a.fit?.distancePenalty ?? 0;
+    const distanceB = b.fit?.distancePenalty ?? 0;
+    if (distanceA !== distanceB) return distanceA - distanceB;
     const featuredA = isFeaturedProject(a.project, prefs) ? 0 : 1;
     const featuredB = isFeaturedProject(b.project, prefs) ? 0 : 1;
     if (featuredA !== featuredB) return featuredA - featuredB;

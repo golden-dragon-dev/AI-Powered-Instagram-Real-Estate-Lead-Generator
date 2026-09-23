@@ -53,9 +53,12 @@ test("step 17c one core gap is a nearby option, not a blanket no-match", async (
   );
 
   assert.equal(result.fitTier, "nearby");
-  assert.ok(result.matchCount >= 1);
+  assert.equal(result.matchCount, 1);
+  assert.equal(result.matches[0].unit.bedrooms, 2);
   assert.match(result.reply, /closest confirmed option|trade-off/i);
   assert.match(result.reply, /3 bedroom/i);
+  assert.match(result.reply, /2 bedroom apartment/i);
+  assert.doesNotMatch(result.reply, /studio ·|1 bedroom apartment/i);
   assert.doesNotMatch(result.reply, /I do not have an exact match/i);
   assert.ok(result.check.ok);
 });
@@ -119,7 +122,24 @@ test("step 17f every recommendation carries auditable fit evidence", async () =>
     assert.ok(match.fit);
     assert.ok(["exact", "strong_with_compromise", "nearby"].includes(match.fit.tier));
     assert.ok(Number.isFinite(match.fit.score));
+    assert.ok(Number.isFinite(match.fit.distancePenalty));
     assert.ok(Array.isArray(match.fit.matched));
     assert.ok(Array.isArray(match.fit.compromises));
   }
+});
+
+test("step 17g financing compromise selects the smallest real cash gap", async () => {
+  const { engine } = await setupConversation();
+  const result = await engine.handleMessage(
+    "ig_m2_advisor_6",
+    "AED 3M, Yas, 3 bedrooms, 50k down, payment plan"
+  );
+
+  assert.equal(result.fitTier, "strong_with_compromise");
+  assert.equal(result.matchCount, 1);
+  assert.equal(result.matches[0].project.name, "Yas Park Views");
+  assert.equal(result.matches[0].downPaymentAed, 260_000);
+  assert.match(result.reply, /Yas Park Views.*strong fit/is);
+  assert.match(result.reply, /260,000/i);
+  assert.doesNotMatch(result.reply, /Yas Grove|800,000/i);
 });
