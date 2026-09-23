@@ -165,6 +165,7 @@ const server = http.createServer(async (req, res) => {
         nextQuestion: result.nextQuestion,
         claudeUsed: Boolean(result.polished),
         claudeEnabled: Boolean(engine.llm?.apiKey),
+        understandingSource: result.understandingSource || null,
         buyer: {
           budgetAed: result.buyer.budgetAed,
           cashAvailableAed: result.buyer.cashAvailableAed,

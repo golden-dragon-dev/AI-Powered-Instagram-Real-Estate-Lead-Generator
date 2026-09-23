@@ -202,12 +202,12 @@ function extractBudget(text) {
 function extractCash(text) {
   const patterns = [
     new RegExp(
-      `(?:cash(?:\\s+available|\\s+ready)?|down\\s*payment|initial(?:\\s+payment)?|ready\\s+now|have\\s+now)\\s*(?:of\\s*)?(?:AED|Dhs|Dh)?\\s*${MONEY_TOKEN}`,
+      `(?:cash(?:\\s+available|\\s+ready)?|down\\s*payment|initial(?:\\s+payment)?|put\\s+down|deposit|ready\\s+now|have\\s+now)\\s*(?:of\\s*|about\\s*|around\\s*)?(?:AED|Dhs|Dh)?\\s*${MONEY_TOKEN}`,
       "i"
     ),
     new RegExp(`${MONEY_TOKEN}\\s*(?:cash|down|ready\\s+now|available\\s+now)`, "i"),
-    new RegExp(`\\b(\\d[\\d,]*(?:\\.\\d+)?\\s*[Kk])\\b(?=.*\\b(?:cash|down|now|ready|available)\\b)`, "i"),
-    new RegExp(`\\b(?:i\\s+have|with)\\s+(?:AED|Dhs|Dh)?\\s*${MONEY_TOKEN}\\s*(?:available now|ready now|cash)`, "i")
+    new RegExp(`\\b(\\d[\\d,]*(?:\\.\\d+)?\\s*[Kk])\\b(?=.*\\b(?:cash|down|now|ready|available|put\\s+down|deposit)\\b)`, "i"),
+    new RegExp(`\\b(?:i\\s+have|with|i\\s+can\\s+put\\s+down)\\s+(?:about\\s+|around\\s+)?(?:AED|Dhs|Dh)?\\s*${MONEY_TOKEN}\\s*(?:available now|ready now|cash)?`, "i")
   ];
   for (const pattern of patterns) {
     const match = text.match(pattern);

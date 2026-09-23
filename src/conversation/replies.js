@@ -22,7 +22,9 @@ export function buildConversationReply({
   mismatches = [],
   highIntent = false,
   handoffRequested = false,
-  pendingOffer = null
+  pendingOffer = null,
+  unsure = [],
+  ack = null
 }) {
   const lines = [];
   const declineContact = intents.includes("decline_contact") || Boolean(buyer.contactDeclined);
@@ -34,7 +36,7 @@ export function buildConversationReply({
     nextQuestion = {
       field: "budgetAed",
       prompt: "What budget are you working with?",
-      choices: null
+      choices: budgetRangeChoices()
     };
     return finish(lines, "qualifying", nextQuestion, null);
   }
@@ -47,6 +49,9 @@ export function buildConversationReply({
   }
   if (intents.includes("decline_contact")) {
     lines.push("No problem. We can keep looking without a phone number.");
+  }
+  if (ack) {
+    lines.push(ack);
   }
   if ((handoffRequested || highIntent) && !declineContact) {
     lines.push("I can flag this for an advisor while we stay with confirmed figures.");
@@ -71,8 +76,15 @@ export function buildConversationReply({
     nextQuestion = {
       field: "budgetAed",
       prompt: "What budget are you working with?",
-      choices: null
+      choices: budgetRangeChoices()
     };
+    return finish(lines, "qualifying", nextQuestion, null);
+  }
+
+  if (unsure.length || intents.includes("unsure")) {
+    const unsureReply = buildUnsureFollowUp(buyer, unsure);
+    if (unsureReply.text) lines.push(unsureReply.text);
+    nextQuestion = unsureReply.nextQuestion;
     return finish(lines, "qualifying", nextQuestion, null);
   }
 
@@ -148,26 +160,95 @@ export function buildConversationReply({
     includeFinancing: false
   });
   if (!buyer.budgetAed) {
-    lines.push("What budget are you working with?");
+    if (!ack) lines.push("What budget are you working with?");
     nextQuestion = question || {
       field: "budgetAed",
       prompt: "What budget are you working with?",
-      choices: null
+      choices: budgetRangeChoices()
     };
+    if (!nextQuestion.choices) nextQuestion = { ...nextQuestion, choices: budgetRangeChoices() };
   } else if (!(buyer.preferredAreas?.length || buyer.projectInterest)) {
     const areaGroup = choicesForField("preferredAreas");
-    lines.push("Which area are you leaning toward?");
+    if (!ack) lines.push("Which area are you leaning toward?");
     nextQuestion = question || {
       field: "preferredAreas",
       prompt: "Which area are you leaning toward?",
       choices: areaGroup?.choices || null
     };
   } else {
-    lines.push(question?.prompt || "What size are you after?");
+    if (!ack) lines.push(question?.prompt || "What size are you after?");
     nextQuestion = question;
   }
 
   return finish(lines, "qualifying", nextQuestion, null);
+}
+
+function budgetRangeChoices() {
+  return [
+    { id: "1_5m", label: "Around AED 1.5M", value: "around 1.5M" },
+    { id: "2m", label: "Around AED 2M", value: "around 2M" },
+    { id: "3m", label: "Around AED 3M", value: "around 3M" },
+    { id: "5m", label: "AED 5M+", value: "budget 5M" }
+  ];
+}
+
+function buildUnsureFollowUp(buyer, unsureFields) {
+  const field = unsureFields[0] || (!buyer.budgetAed ? "budget" : !buyer.preferredAreas?.length ? "area" : "bedrooms");
+
+  if (field === "budget" || (!buyer.budgetAed && field !== "area" && field !== "bedrooms" && field !== "cash")) {
+    return {
+      text: "Want to pick a rough range so I can show confirmed options?",
+      nextQuestion: {
+        field: "budgetAed",
+        prompt: "Want to pick a rough range so I can show confirmed options?",
+        choices: budgetRangeChoices()
+      }
+    };
+  }
+
+  if (field === "area" || (!(buyer.preferredAreas?.length || buyer.projectInterest) && field !== "bedrooms" && field !== "cash")) {
+    const areaGroup = choicesForField("preferredAreas");
+    return {
+      text: "Any area you want to start with, or should I keep it flexible across Abu Dhabi?",
+      nextQuestion: {
+        field: "preferredAreas",
+        prompt: "Any area you want to start with?",
+        choices: [
+          ...(areaGroup?.choices || []),
+          { id: "flexible", label: "Keep area flexible", value: "open to other areas" }
+        ]
+      }
+    };
+  }
+
+  if (field === "cash") {
+    return {
+      text: "Any rough figure for the initial payment, even a ballpark?",
+      nextQuestion: {
+        field: "cashAvailableAed",
+        prompt: "Any rough figure for the initial payment?",
+        choices: [
+          { id: "100k", label: "About AED 100k", value: "put down about 100k" },
+          { id: "300k", label: "About AED 300k", value: "put down about 300k" },
+          { id: "500k", label: "About AED 500k", value: "put down about 500k" }
+        ]
+      }
+    };
+  }
+
+  return {
+    text: "Studio, 1, 2, or 3 bedrooms?",
+    nextQuestion: {
+      field: "bedrooms",
+      prompt: "Studio, 1, 2, or 3 bedrooms?",
+      choices: [
+        { id: "0", label: "Studio", value: "studio" },
+        { id: "1", label: "1 bedroom", value: "1 bedroom" },
+        { id: "2", label: "2 bedrooms", value: "2 bedrooms" },
+        { id: "3", label: "3 bedrooms", value: "3 bedrooms" }
+      ]
+    }
+  };
 }
 
 function buildContextualFollowUp(buyer, matches, packs) {

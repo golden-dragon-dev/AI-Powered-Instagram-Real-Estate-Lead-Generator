@@ -8,7 +8,20 @@ Conversation, qualification, buyer memory, quick-reply choices, and fact-checked
 - Local seed catalog by default
 - Live Airtable when `AIRTABLE_API_KEY` and `AIRTABLE_BASE_ID` are set
 - Editable quick replies in `data/qualification-choices.json`
-- Optional reply polish when `ANTHROPIC_API_KEY` is set
+- Claude understanding when `ANTHROPIC_API_KEY` is set (natural buyer language → structured buyer updates)
+- Optional reply polish on confirmed project packs only (still fact-checked)
+
+## Understanding path
+
+Claude turns imperfect buyer language into structured updates. Code still owns memory and matching. Airtable stays the source of commercial facts. The fact checker is the final safety layer.
+
+Examples that should work in the test chat:
+
+- `Not sure` (offers a range instead of repeating the same question)
+- `around 2M`
+- `maybe Yas but open to other areas`
+- `actually make that 2 bedrooms`
+- `I can put down about 300k`
 
 ## Web test chat
 
@@ -22,7 +35,7 @@ Open:
 http://127.0.0.1:8787/
 ```
 
-Keep the same test buyer id in the page header to check memory.
+Keep the same test buyer id in the page header to check memory. On the hosted test chat, paste the Anthropic key in Settings.
 
 ## CLI test chat
 

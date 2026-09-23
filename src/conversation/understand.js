@@ -1,0 +1,289 @@
+/**
+ * Claude (or local) understanding → structured buyer updates.
+ * Matching, memory persistence, and commercial facts stay in code / Airtable.
+ */
+
+import { parseMoney, normalizeArea, normalizeBedrooms, normalizePropertyType, normalizeDeveloper } from "../matching/normalize.js";
+import { FINANCING_VALUES, USE_TYPES } from "../schema/fields.js";
+
+const DEFAULT_MODEL = "claude-sonnet-4-20250514";
+
+const UNDERSTAND_SYSTEM = [
+  "You extract structured buyer requirements from Abu Dhabi off-plan property chat.",
+  "Return ONLY valid JSON with this shape:",
+  '{"facts":{"budget":number|null,"cash":number|null,"area":string|null,"areas":string[]|null,"bedrooms":number|null,"propertyType":string|null,"developer":string|null,"project":string|null,"financing":"cash"|"mortgage"|"payment_plan"|null,"useType":"investment"|"end_use"|null,"contactDeclined":boolean|null,"openToOtherAreas":boolean|null},"unsure":string[],"intents":string[],"signals":string[],"ack":string|null}',
+  "Rules:",
+  "- Convert money to AED numbers. around/about/roughly 2M → 2000000. 300k → 300000.",
+  "- bedrooms studio → 0. Corrections like actually make that 2 bedrooms replace bedrooms.",
+  "- Areas: Yas Island, Saadiyat Island, Hudayriyat Island, Al Reem Island when clear.",
+  "- If buyer says not sure / unsure / idk about a field, put that field name in unsure (budget, cash, area, bedrooms, financing) and leave facts for that field null.",
+  "- If open to other areas while preferring one, set area plus openToOtherAreas true.",
+  "- intents may include greet, unsure, search, correction, decline_contact, high_intent, reserve, viewing, ask_facts, continue, start_fresh.",
+  "- ack is one short natural sentence acknowledging the update with NO prices, projects, or commercial claims. null if nothing useful.",
+  "- Never invent listing prices, payment plans, handover dates, or availability."
+].join(" ");
+
+/**
+ * Ask Claude for structured understanding of one buyer message.
+ */
+export async function understandMessageWithModel(client, { message, buyer, lastAskedField = null, recentTurns = [] }) {
+  if (!client?.apiKey) return null;
+
+  const user = JSON.stringify({
+    message,
+    lastAskedField,
+    buyer: {
+      budgetAed: buyer?.budgetAed ?? null,
+      cashAvailableAed: buyer?.cashAvailableAed ?? null,
+      preferredAreas: buyer?.preferredAreas || [],
+      bedrooms: buyer?.bedrooms || [],
+      financing: buyer?.financing || null,
+      useType: buyer?.useType || null,
+      projectInterest: buyer?.projectInterest || null
+    },
+    recentTurns: recentTurns.slice(-6).map((t) => ({ role: t.role, text: t.text }))
+  });
+
+  try {
+    const response = await fetch(`${client.baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": client.apiKey,
+        "anthropic-version": "2023-06-01"
+      },
+      body: JSON.stringify({
+        model: client.model || DEFAULT_MODEL,
+        max_tokens: 500,
+        system: UNDERSTAND_SYSTEM,
+        messages: [{ role: "user", content: user }]
+      })
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    const text = (data.content || [])
+      .filter((block) => block.type === "text")
+      .map((block) => block.text)
+      .join("\n")
+      .trim();
+    return normalizeUnderstanding(parseJsonObject(text), "claude");
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Local heuristics for imperfect phrasing when Claude is offline (tests / fallback).
+ */
+export function understandMessageLocally(message, { buyer = null, lastAskedField = null } = {}) {
+  const text = String(message || "").trim();
+  const facts = {};
+  const unsure = [];
+  const intents = [];
+  const signals = [];
+  let ack = null;
+
+  if (!text) {
+    return { facts, unsure, intents: ["empty"], signals, ack: null, source: "local" };
+  }
+
+  const unsureOnly =
+    /^(not sure|unsure|i'?m not sure|not really sure|idk|i don'?t know|dont know|no idea|maybe later|skip)([.!?]*)$/i.test(
+      text
+    ) ||
+    (/^\s*(not sure|unsure)\b/i.test(text) && text.length < 48 && !/\d/.test(text));
+
+  if (unsureOnly) {
+    const field = mapAskedField(lastAskedField) || "budget";
+    unsure.push(field);
+    intents.push("unsure");
+    ack =
+      field === "budget"
+        ? "No problem if the budget is still open."
+        : field === "area"
+          ? "No problem if the area is still open."
+          : field === "bedrooms"
+            ? "No problem if the size is still open."
+            : field === "cash"
+              ? "No problem if the initial cash is still open."
+              : "No problem if that detail is still open.";
+  }
+
+  // around / about / roughly budget
+  const aroundBudget = text.match(
+    /\b(?:around|about|roughly|approx(?:imately)?|near(?:ly)?)\s*(?:AED|Dhs|Dh)?\s*(\d[\d,]*(?:\.\d+)?\s*[MmKk]?)\b/i
+  );
+  if (aroundBudget && !/\b(put\s+down|cash|down|initial|deposit)\b/i.test(text)) {
+    const amount = parseMoney(aroundBudget[1]);
+    if (amount !== null && amount >= 200_000) {
+      facts.budget = amount;
+      intents.push("provide_facts");
+      ack = ack || `Got it, around AED ${amount.toLocaleString("en-US")}.`;
+    }
+  }
+
+  // put down / deposit / can put about 300k
+  const putDown = text.match(
+    /\b(?:put\s+down|deposit|down\s*payment|initial)\b[\s\w]{0,24}?(?:about|around|roughly)?\s*(?:AED|Dhs|Dh)?\s*(\d[\d,]*(?:\.\d+)?\s*[MmKk]?)/i
+  ) || text.match(
+    /\b(?:about|around|roughly)\s*(?:AED|Dhs|Dh)?\s*(\d[\d,]*(?:\.\d+)?\s*[Kk])\b(?=.*\b(put|down|cash|initial|deposit)\b)/i
+  );
+  if (putDown) {
+    const amount = parseMoney(putDown[1]);
+    if (amount !== null && amount > 0) {
+      facts.cash = amount;
+      intents.push("provide_facts");
+      ack = ack || `Noted, about AED ${amount.toLocaleString("en-US")} for the initial payment.`;
+    }
+  }
+
+  if (/\bopen to (other )?areas?\b/i.test(text) || /\bother areas? (work|fine|ok|okay)\b/i.test(text)) {
+    facts.openToOtherAreas = true;
+    signals.push("area_flexible");
+    intents.push("provide_facts");
+    ack = ack || "Happy to keep other Abu Dhabi areas in play.";
+  }
+
+  if (/\bmaybe\b.+\b(yas|saadiyat|hudayriyat|reem)\b/i.test(text) || /\b(yas|saadiyat|hudayriyat|reem)\b.+\b(maybe|open|flexible)\b/i.test(text)) {
+    facts.openToOtherAreas = true;
+    signals.push("area_flexible");
+  }
+
+  return normalizeUnderstanding({ facts, unsure, intents, signals, ack }, "local");
+}
+
+/**
+ * Merge regex extract + local/Claude understanding into one fact/intent pack.
+ * Understanding wins when it supplies a field. Unsure clears that field from facts.
+ */
+export function mergeUnderstanding(baseExtract, understanding) {
+  const base = baseExtract || { facts: {}, signals: [], intents: [] };
+  const u = normalizeUnderstanding(understanding || {}, understanding?.source || "none");
+
+  let facts = { ...base.facts };
+  const rawFacts = u.facts || {};
+
+  if (rawFacts.budget != null) facts.budget = rawFacts.budget;
+  if (rawFacts.cash != null) facts.cash = rawFacts.cash;
+  if (rawFacts.area) facts.area = normalizeArea(rawFacts.area);
+  if (Array.isArray(rawFacts.areas) && rawFacts.areas.length) {
+    facts.areas = rawFacts.areas.map(normalizeArea).filter(Boolean);
+    if (!facts.area) facts.area = facts.areas[0];
+  }
+  if (rawFacts.bedrooms !== null && rawFacts.bedrooms !== undefined) {
+    facts.bedrooms = normalizeBedrooms(rawFacts.bedrooms);
+  }
+  if (rawFacts.propertyType) facts.propertyType = normalizePropertyType(rawFacts.propertyType);
+  if (rawFacts.developer) facts.developer = normalizeDeveloper(rawFacts.developer);
+  if (rawFacts.project) facts.project = rawFacts.project;
+  if (rawFacts.financing && FINANCING_VALUES.includes(rawFacts.financing)) {
+    facts.financing = rawFacts.financing;
+  }
+  if (rawFacts.useType && USE_TYPES.includes(rawFacts.useType)) facts.useType = rawFacts.useType;
+  if (rawFacts.contactDeclined === true) facts.contactDeclined = true;
+  if (rawFacts.openToOtherAreas === true) {
+    facts.openToOtherAreas = true;
+  }
+
+  for (const field of u.unsure || []) {
+    if (field === "budget") delete facts.budget;
+    if (field === "cash") delete facts.cash;
+    if (field === "area") {
+      delete facts.area;
+      delete facts.areas;
+    }
+    if (field === "bedrooms") delete facts.bedrooms;
+    if (field === "financing") delete facts.financing;
+  }
+
+  const intents = [...new Set([...(base.intents || []), ...(u.intents || [])])];
+  const signals = [...new Set([...(base.signals || []), ...(u.signals || [])])];
+  if (rawFacts.openToOtherAreas || signals.includes("area_flexible")) {
+    signals.push("area_flexible");
+    facts.intentSignals = [...new Set([...(facts.intentSignals || []), "area_flexible"])];
+  }
+  if (signals.length) facts.intentSignals = [...new Set([...(facts.intentSignals || []), ...signals])];
+
+  return {
+    facts,
+    signals,
+    intents,
+    unsure: u.unsure || [],
+    ack: u.ack || null,
+    source: u.source || "none"
+  };
+}
+
+export function normalizeUnderstanding(raw, source = "none") {
+  const input = raw && typeof raw === "object" ? raw : {};
+  const factsIn = input.facts && typeof input.facts === "object" ? input.facts : input;
+  const facts = {};
+
+  if (factsIn.budget != null) {
+    const n = typeof factsIn.budget === "number" ? factsIn.budget : parseMoney(factsIn.budget);
+    if (n !== null) facts.budget = n;
+  }
+  if (factsIn.cash != null) {
+    const n = typeof factsIn.cash === "number" ? factsIn.cash : parseMoney(factsIn.cash);
+    if (n !== null) facts.cash = n;
+  }
+  if (factsIn.area) facts.area = normalizeArea(factsIn.area);
+  if (Array.isArray(factsIn.areas)) {
+    facts.areas = factsIn.areas.map(normalizeArea).filter(Boolean);
+  }
+  if (factsIn.bedrooms !== null && factsIn.bedrooms !== undefined) {
+    const beds = normalizeBedrooms(factsIn.bedrooms);
+    if (beds !== null) facts.bedrooms = beds;
+  }
+  if (factsIn.propertyType) facts.propertyType = normalizePropertyType(factsIn.propertyType);
+  if (factsIn.developer) facts.developer = normalizeDeveloper(factsIn.developer);
+  if (factsIn.project) facts.project = String(factsIn.project).trim();
+  if (factsIn.financing && FINANCING_VALUES.includes(factsIn.financing)) {
+    facts.financing = factsIn.financing;
+  }
+  if (factsIn.useType && USE_TYPES.includes(factsIn.useType)) facts.useType = factsIn.useType;
+  if (factsIn.contactDeclined === true) facts.contactDeclined = true;
+  if (factsIn.openToOtherAreas === true) facts.openToOtherAreas = true;
+
+  const unsure = Array.isArray(input.unsure)
+    ? input.unsure.map(mapAskedField).filter(Boolean)
+    : [];
+  const intents = Array.isArray(input.intents) ? input.intents.map(String) : [];
+  const signals = Array.isArray(input.signals) ? input.signals.map(String) : [];
+  const ack =
+    typeof input.ack === "string" && input.ack.trim() && !looksCommercial(input.ack)
+      ? input.ack.trim()
+      : null;
+
+  return { facts, unsure, intents, signals, ack, source };
+}
+
+function mapAskedField(field) {
+  if (!field) return null;
+  const key = String(field);
+  if (key === "budgetAed" || key === "budget") return "budget";
+  if (key === "cashAvailableAed" || key === "cash") return "cash";
+  if (key === "preferredAreas" || key === "area") return "area";
+  if (key === "bedrooms") return "bedrooms";
+  if (key === "financing") return "financing";
+  if (key === "propertyTypes" || key === "propertyType") return "propertyType";
+  return null;
+}
+
+function looksCommercial(text) {
+  return /\b(AED|from AED|handover|payment plan|sqft|sold out|available units)\b/i.test(text);
+}
+
+function parseJsonObject(text) {
+  if (!text) return null;
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const raw = fenced ? fenced[1] : text;
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
+  if (start === -1 || end === -1) return null;
+  try {
+    return JSON.parse(raw.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+}

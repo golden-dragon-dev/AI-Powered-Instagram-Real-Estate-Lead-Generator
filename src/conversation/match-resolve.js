@@ -37,13 +37,35 @@ export function resolveMatches(catalog, buyer) {
     }
   ];
 
+  const flexibleArea =
+    Boolean(buyer.openToOtherAreas) ||
+    (buyer.intentSignals || []).includes("area_flexible");
+  if (flexibleArea && base.budgetAed) {
+    attempts.push({
+      mode: "budget_only_flexible_area",
+      criteria: {
+        emirate: base.emirate,
+        area: null,
+        project: base.project,
+        developer: base.developer,
+        budgetAed: base.budgetAed,
+        bedrooms: base.bedrooms,
+        propertyType: base.propertyType,
+        cashAvailableAed: base.cashAvailableAed,
+        paymentPlanRequired: base.paymentPlanRequired
+      },
+      relaxed: ["area"]
+    });
+  }
+
   const seen = new Set();
   for (const attempt of attempts) {
     const key = JSON.stringify(attempt.criteria);
     if (seen.has(key)) continue;
     seen.add(key);
 
-    if (!canPitchWithCriteria(attempt.criteria)) continue;
+    const allowEmirateOnly = attempt.relaxed.includes("area");
+    if (!canPitchWithCriteria(attempt.criteria, { allowEmirateOnly })) continue;
 
     const result = matchInventory(catalog, attempt.criteria);
     if (result.matchCount > 0) {
@@ -80,8 +102,14 @@ export function canPitchBuyer(buyer) {
   );
 }
 
-function canPitchWithCriteria(criteria) {
-  return Boolean(criteria.budgetAed && (criteria.area || criteria.project || criteria.developer));
+function canPitchWithCriteria(criteria, { allowEmirateOnly = false } = {}) {
+  return Boolean(
+    criteria.budgetAed &&
+      (criteria.area ||
+        criteria.project ||
+        criteria.developer ||
+        (allowEmirateOnly && criteria.emirate))
+  );
 }
 
 export function bedroomOptionsFromMatches(matches) {
@@ -169,6 +197,19 @@ export function explainSoftMismatches(buyer, matches, mode = "exact", relaxed = 
     if (overBudget.length) {
       notes.push(
         `You set a budget of ${formatAed(buyer.budgetAed)}. ${overBudget[0].project.name} starts at ${formatAed(overBudget[0].unit.startingPriceAed)}, so the budget does not match.`
+      );
+    }
+  }
+
+  if (
+    (relaxed.includes("area") || mode === "budget_only_flexible_area") &&
+    buyer.preferredAreas?.length
+  ) {
+    const offeredAreas = [...new Set(matches.map((row) => row.project.area).filter(Boolean))];
+    const wanted = buyer.preferredAreas[0];
+    if (offeredAreas.length && !offeredAreas.includes(wanted)) {
+      notes.push(
+        `You leaned toward ${wanted}. These confirmed options are in ${offeredAreas.join(" and ")}, so the area does not match exactly.`
       );
     }
   }

@@ -131,6 +131,7 @@ async function sendMessage(text) {
 
   const metaParts = [];
   if (data.matchCount) metaParts.push(`${data.matchCount} match${data.matchCount === 1 ? "" : "es"}`);
+  if (data.understandingSource === "claude") metaParts.push("understood");
   if (data.claudeUsed) metaParts.push("Claude");
   else if (data.claudeEnabled === false) metaParts.push("templates only");
   if (data.factCheckOk === false) metaParts.push("fact check blocked");

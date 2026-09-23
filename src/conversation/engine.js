@@ -5,6 +5,7 @@ import { canPitchBuyer, resolveMatches } from "./match-resolve.js";
 import { summarizeBuyer, isCoreQualified } from "./qualify.js";
 import { buildConversationReply, fallbackSafeText } from "./replies.js";
 import { polishReplyWithModel } from "./llm.js";
+import { understandMessageWithModel, understandMessageLocally, mergeUnderstanding } from "./understand.js";
 import { isAffirmation, resolveAffirmation } from "./affirmation.js";
 import { retrieveFacts } from "../facts/retrieval.js";
 
@@ -25,8 +26,9 @@ function leadStatusFor(buyer, intents, matchCount) {
 }
 
 /**
- * Test-environment conversation engine.
- * Matching stays in code. Soft preferences only rank confirmed projects.
+ * Conversation engine.
+ * Claude understands natural messages into structured updates.
+ * Matching, memory, and commercial facts stay in code / Airtable.
  */
 export class ConversationEngine {
   constructor({ buyers, properties, memory, llm = null } = {}) {
@@ -39,7 +41,31 @@ export class ConversationEngine {
 
   async handleMessage(instagramUserId, message, options = {}) {
     const text = String(message || "").trim();
-    let { facts, signals, intents } = extractFactsFromMessage(text);
+    const lastAskedField = this.memory.getLastAskedField(instagramUserId);
+    const existingBuyer = await this.buyers.getOrCreate(instagramUserId);
+    const recentTurns = this.memory.recentContext(instagramUserId, 6);
+
+    let base = extractFactsFromMessage(text);
+
+    let understanding = understandMessageLocally(text, {
+      buyer: existingBuyer,
+      lastAskedField
+    });
+
+    if (this.llm && options.useLlm !== false) {
+      const claudeUnderstanding = await understandMessageWithModel(this.llm, {
+        message: text,
+        buyer: existingBuyer,
+        lastAskedField,
+        recentTurns
+      });
+      if (claudeUnderstanding) {
+        understanding = claudeUnderstanding;
+      }
+    }
+
+    const merged = mergeUnderstanding(base, understanding);
+    let { facts, signals, intents, unsure, ack } = merged;
 
     const pendingOffer = this.memory.getPendingOffer(instagramUserId);
     if (isAffirmation(text) && pendingOffer) {
@@ -49,7 +75,6 @@ export class ConversationEngine {
       if (!intents.includes("affirm")) intents = [...intents, "affirm"];
     }
 
-    // "Show both" from bedroom chips
     if (/^both$/i.test(text) && pendingOffer?.type === "bedroom_choice") {
       this.memory.setPendingOffer(instagramUserId, null);
     }
@@ -62,16 +87,34 @@ export class ConversationEngine {
       await this.buyers.resetCriteria(instagramUserId);
       this.memory.clear(instagramUserId);
       facts = {};
+      unsure = [];
+      ack = null;
     }
 
     let buyer = await this.buyers.remember(instagramUserId, facts);
+    if (facts.openToOtherAreas === true || signals.includes("area_flexible")) {
+      buyer = await this.buyers.updateMeta(instagramUserId, {
+        intentSignals: ["area_flexible"]
+      });
+      buyer = {
+        ...buyer,
+        openToOtherAreas: true,
+        intentSignals: [...new Set([...(buyer.intentSignals || []), "area_flexible"])]
+      };
+    }
+
     if (facts.bedrooms !== undefined || facts.project || facts.area) {
-      // Concrete choice made; drop stale pending offer
       if (facts.bedrooms !== undefined || facts.project) {
         this.memory.setPendingOffer(instagramUserId, null);
       }
     }
-    this.memory.addTurn(instagramUserId, { role: "user", text, intents, signals });
+    this.memory.addTurn(instagramUserId, {
+      role: "user",
+      text,
+      intents,
+      signals,
+      understandingSource: understanding?.source || null
+    });
 
     const handoffRequested = intents.includes("agent") || Boolean(options.handoffRequested);
     const highIntent = hasHighIntent(intents, buyer);
@@ -90,17 +133,20 @@ export class ConversationEngine {
       mismatches: matchResult.mismatches || [],
       highIntent,
       handoffRequested,
-      pendingOffer: this.memory.getPendingOffer(instagramUserId)
+      pendingOffer: this.memory.getPendingOffer(instagramUserId),
+      unsure,
+      ack
     });
 
     if (draft.pendingOffer) {
       this.memory.setPendingOffer(instagramUserId, draft.pendingOffer);
     } else if (draft.stage === "matched" || draft.stage === "soft_match") {
-      // keep pending if follow-up set it; otherwise clear stale offers when fully answered
       if (!draft.nextQuestion) this.memory.setPendingOffer(instagramUserId, null);
     }
 
-    if (this.llm && options.useLlm !== false && packs.length) {
+    this.memory.setLastAskedField(instagramUserId, draft.nextQuestion?.field || null);
+
+    if (this.llm && options.useLlm !== false && packs.length && draft.stage !== "qualifying") {
       const polished = await polishReplyWithModel(this.llm, {
         buyer,
         packs,
@@ -162,9 +208,12 @@ export class ConversationEngine {
       reply: replyText,
       stage: draft.stage,
       polished: Boolean(draft.polished),
+      understood: Boolean(understanding?.source && understanding.source !== "none"),
+      understandingSource: understanding?.source || null,
       buyer,
       intents,
       signals,
+      unsure,
       criteria: matchResult.criteria,
       matchCount: matchResult.matchCount,
       matchMode: matchResult.mode,
