@@ -4,7 +4,7 @@
  * Works without npm packages via fetch (Node 18+).
  */
 
-const DEFAULT_MODEL = "claude-sonnet-4-20250514";
+const DEFAULT_MODEL = "claude-sonnet-5";
 
 export function createAnthropicClient(options = {}) {
   const apiKey = options.apiKey || process.env.ANTHROPIC_API_KEY;
@@ -79,6 +79,7 @@ export async function polishReplyWithModel(client, { buyer, packs, draftText, in
       body: JSON.stringify({
         model: client.model,
         max_tokens: 400,
+        thinking: { type: "disabled" },
         system,
         messages: [{ role: "user", content: user }]
       })

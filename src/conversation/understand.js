@@ -6,7 +6,7 @@
 import { parseMoney, normalizeArea, normalizeBedrooms, normalizePropertyType, normalizeDeveloper } from "../matching/normalize.js";
 import { FINANCING_VALUES, USE_TYPES } from "../schema/fields.js";
 
-const DEFAULT_MODEL = "claude-sonnet-4-20250514";
+const DEFAULT_MODEL = "claude-sonnet-5";
 
 const UNDERSTAND_SYSTEM = [
   "You extract structured buyer requirements from Abu Dhabi off-plan property chat.",
@@ -57,6 +57,7 @@ export async function understandMessageWithModel(client, { message, buyer, lastA
       body: JSON.stringify({
         model: client.model || DEFAULT_MODEL,
         max_tokens: 500,
+        thinking: { type: "disabled" },
         system: UNDERSTAND_SYSTEM,
         messages: [{ role: "user", content: user }]
       })
