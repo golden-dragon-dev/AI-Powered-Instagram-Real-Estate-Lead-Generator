@@ -164,13 +164,19 @@ export function buildConversationReply({
   const readyToPitch = canPitchBuyer(buyer) || Boolean(buyer.projectInterest);
 
   if (readyToPitch && packs.length) {
-    const intro = renderProjectIntro({
-      buyer,
-      packs,
-      mode: matchMode,
-      mismatches
-    });
-    if (intro) lines.push(intro);
+    const answeringFollowUp =
+      matchMode === "exact" &&
+      ((lastAskedField === "financing" && updatedFields.includes("financing")) ||
+        (lastAskedField === "cashAvailableAed" && updatedFields.includes("cash")));
+    if (!answeringFollowUp) {
+      const intro = renderProjectIntro({
+        buyer,
+        packs,
+        mode: matchMode,
+        mismatches
+      });
+      if (intro) lines.push(intro);
+    }
 
     const followUp = buildContextualFollowUp(buyer, matches, packs, {
       lastAskedField,
