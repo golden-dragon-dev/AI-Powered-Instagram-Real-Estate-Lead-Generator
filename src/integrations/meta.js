@@ -64,6 +64,23 @@ export function parseInstagramMessages(payload) {
   return events;
 }
 
+function isInstagramUserToken(token) {
+  return /^IGAA/i.test(String(token || ""));
+}
+
+/**
+ * Instagram Login tokens use graph.instagram.com /me/messages.
+ * Facebook Page tokens use graph.facebook.com /{page-id}/messages.
+ */
+export function instagramSendUrl(env = process.env) {
+  const config = metaConfig(env);
+  if (isInstagramUserToken(config.pageAccessToken)) {
+    const igBase = env.META_IG_GRAPH_BASE_URL || "https://graph.instagram.com";
+    return `${igBase}/${config.graphVersion}/me/messages`;
+  }
+  return `${config.graphBaseUrl}/${config.graphVersion}/${config.pageId}/messages`;
+}
+
 export async function sendInstagramText({
   recipientId,
   text,
@@ -71,21 +88,24 @@ export async function sendInstagramText({
   fetchImpl = fetch
 } = {}) {
   const config = metaConfig(env);
-  if (!config.pageAccessToken || !config.pageId) {
+  const igToken = isInstagramUserToken(config.pageAccessToken);
+  if (!config.pageAccessToken || (!igToken && !config.pageId)) {
     throw new Error("META_PAGE_ACCESS_TOKEN and META_PAGE_ID are required to send Instagram replies");
   }
-  const url = `${config.graphBaseUrl}/${config.graphVersion}/${config.pageId}/messages`;
+  const url = instagramSendUrl(env);
+  const payload = {
+    recipient: { id: String(recipientId) },
+    message: { text: String(text || "").slice(0, 1000) }
+  };
+  if (!igToken) payload.messaging_type = "RESPONSE";
+
   const response = await fetchImpl(url, {
     method: "POST",
     headers: {
       "content-type": "application/json",
       authorization: `Bearer ${config.pageAccessToken}`
     },
-    body: JSON.stringify({
-      recipient: { id: String(recipientId) },
-      messaging_type: "RESPONSE",
-      message: { text: String(text || "").slice(0, 1000) }
-    })
+    body: JSON.stringify(payload)
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -97,6 +117,41 @@ export async function sendInstagramText({
   }
   return {
     recipientId: body.recipient_id || recipientId,
-    messageId: body.message_id || null
+    messageId: body.message_id || body.id || null
   };
+}
+
+/**
+ * Ensure the Instagram professional account is subscribed to messaging webhook fields.
+ * UI toggles alone are not always enough for Instagram Login apps.
+ */
+export async function subscribeInstagramMessaging({
+  env = process.env,
+  fetchImpl = fetch,
+  fields = ["messages", "messaging_postbacks", "messaging_seen", "message_reactions"]
+} = {}) {
+  const config = metaConfig(env);
+  if (!config.pageAccessToken) {
+    return { skipped: true, reason: "missing_access_token" };
+  }
+  if (!isInstagramUserToken(config.pageAccessToken)) {
+    return { skipped: true, reason: "not_instagram_user_token" };
+  }
+  const igBase = env.META_IG_GRAPH_BASE_URL || "https://graph.instagram.com";
+  const url = `${igBase}/${config.graphVersion}/me/subscribed_apps?subscribed_fields=${encodeURIComponent(fields.join(","))}`;
+  const response = await fetchImpl(url, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${config.pageAccessToken}`
+    }
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const detail = body?.error?.message || response.statusText || "subscribe failed";
+    const error = new Error(detail);
+    error.status = response.status;
+    error.retryable = response.status >= 500;
+    throw error;
+  }
+  return { skipped: false, ok: Boolean(body.success ?? true), body };
 }

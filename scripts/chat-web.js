@@ -13,6 +13,7 @@ import { DurableConversationMemory } from "../src/integrations/durable-memory.js
 import { IntegrationOrchestrator } from "../src/integrations/orchestrator.js";
 import { IntegrationLog } from "../src/integrations/integration-log.js";
 import { runtimeRoot } from "../src/integrations/json-store.js";
+import { subscribeInstagramMessaging } from "../src/integrations/meta.js";
 
 loadEnv();
 
@@ -315,4 +316,16 @@ server.listen(PORT, HOST, () => {
   console.log(`Open ${local}`);
   console.log(`Meta webhook: ${local}webhook/meta`);
   console.log(`Catalog source: ${store.source || "local"}`);
+
+  subscribeInstagramMessaging({ env: process.env })
+    .then((result) => {
+      if (result.skipped) {
+        console.log(`Instagram messaging subscribe skipped: ${result.reason}`);
+        return;
+      }
+      console.log("Instagram messaging webhook fields subscribed");
+    })
+    .catch((error) => {
+      console.warn(`Instagram messaging subscribe failed: ${error.message}`);
+    });
 });

@@ -39,17 +39,49 @@ export class IntegrationOrchestrator {
   }
 
   async handleWebhook({ rawBody, signatureHeader }) {
-    if (!verifySignature(rawBody, signatureHeader, this.env)) {
+    const signatureOk = verifySignature(rawBody, signatureHeader, this.env);
+    if (!signatureOk) {
+      await this.log.record({
+        integration: "meta",
+        operation: "webhook",
+        status: "error",
+        message: "invalid_signature",
+        retryable: false,
+        meta: {
+          hasSignature: Boolean(signatureHeader),
+          bodyBytes: Buffer.byteLength(String(rawBody || ""), "utf8")
+        }
+      });
       return { ok: false, status: 403, error: "invalid_signature" };
     }
     let payload;
     try {
       payload = JSON.parse(String(rawBody || "{}"));
     } catch {
+      await this.log.record({
+        integration: "meta",
+        operation: "webhook",
+        status: "error",
+        message: "invalid_json",
+        retryable: false
+      });
       return { ok: false, status: 400, error: "invalid_json" };
     }
 
     const messages = parseInstagramMessages(payload);
+    await this.log.record({
+      integration: "meta",
+      operation: "webhook",
+      status: "ok",
+      message: `accepted_${messages.length}`,
+      retryable: false,
+      meta: {
+        object: payload?.object || null,
+        entryCount: Array.isArray(payload?.entry) ? payload.entry.length : 0,
+        messageCount: messages.length
+      }
+    });
+
     this.queue = this.queue.then(() => this.#processMessages(messages)).catch(async (error) => {
       await this.log.record({
         integration: "orchestrator",
