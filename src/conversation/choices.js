@@ -54,7 +54,9 @@ export function resolveChoice(groupKey, message, filePath) {
     for (const alias of [choice.label, ...(choice.aliases || [])]) {
       const needle = String(alias).trim().toLowerCase();
       if (!needle) continue;
-      if (text === needle || new RegExp(`\\b${escapeRegex(needle)}\\b`, "i").test(text)) {
+      const exact = text === needle;
+      const canMatchInsideSentence = !/^\d+$/.test(needle);
+      if (exact || (canMatchInsideSentence && new RegExp(`\\b${escapeRegex(needle)}\\b`, "i").test(text))) {
         ranked.push({ choice, value: choice.value, length: needle.length });
       }
     }

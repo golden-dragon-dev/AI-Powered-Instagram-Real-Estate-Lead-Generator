@@ -121,3 +121,44 @@ test("step 15i Claude polish preserves the code-owned next question", async () =
     globalThis.fetch = originalFetch;
   }
 });
+
+test("step 15j natural unknown-area sentence keeps the search flexible", async () => {
+  const { engine } = await setupConversation();
+  const result = await engine.handleMessage(
+    "ig_m2_u10",
+    "Hi, I'm looking for a place in Abu Dhabi but I honestly don't know which area would suit me."
+  );
+
+  assert.equal(result.buyer.openToOtherAreas, true);
+  assert.doesNotMatch(result.reply, /Which area are you leaning toward/i);
+  assert.match(result.reply, /budget/i);
+});
+
+test("step 15k budget and full-number down payment do not become bedrooms", async () => {
+  const { engine } = await setupConversation();
+  await engine.handleMessage(
+    "ig_m2_u11",
+    "Hi, I'm looking for a place in Abu Dhabi but I honestly don't know which area would suit me."
+  );
+  const result = await engine.handleMessage(
+    "ig_m2_u11",
+    "My budget is around AED 2 million, and I have roughly AED 300,000 ready for the down payment."
+  );
+
+  assert.equal(result.buyer.budgetAed, 2_000_000);
+  assert.equal(result.buyer.cashAvailableAed, 300_000);
+  assert.deepEqual(result.buyer.bedrooms, []);
+  assert.doesNotMatch(result.reply, /Which area are you leaning toward/i);
+});
+
+test("step 15l not an investment is remembered as end use", async () => {
+  const { engine } = await setupConversation();
+  const result = await engine.handleMessage(
+    "ig_m2_u12",
+    "I'd prefer a two bedroom apartment. It's for me to live in, not an investment."
+  );
+
+  assert.deepEqual(result.buyer.bedrooms, [2]);
+  assert.deepEqual(result.buyer.propertyTypes, ["apartment"]);
+  assert.equal(result.buyer.useType, "end_use");
+});

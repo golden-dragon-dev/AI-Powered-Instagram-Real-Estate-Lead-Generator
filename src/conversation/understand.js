@@ -91,6 +91,11 @@ export function understandMessageLocally(message, { buyer = null, lastAskedField
     return { facts, unsure, intents: ["empty"], signals, ack: null, source: "local" };
   }
 
+  const areaUnsure =
+    /\b(?:don'?t know|dont know|do not know|not sure|no idea)\b[\s\S]{0,48}\b(?:which\s+)?area\b/i.test(text) ||
+    /\b(?:which\s+)?area\b[\s\S]{0,48}\b(?:don'?t know|dont know|not sure|no idea)\b/i.test(text) ||
+    /\b(?:don'?t know|dont know|not sure|no idea)\b[\s\S]{0,32}\bwhere\b/i.test(text);
+
   const unsureOnly =
     /^(not sure|unsure|i'?m not sure|not really sure|idk|i dkn?t know|i don'?t know|dont know|do not know|no idea|not bothered|anywhere|you choose|maybe later|skip)([.!?]*)$/i.test(
       text
@@ -99,8 +104,8 @@ export function understandMessageLocally(message, { buyer = null, lastAskedField
       text.length < 48 &&
       !/\d/.test(text));
 
-  if (unsureOnly) {
-    const field = mapAskedField(lastAskedField) || "budget";
+  if (unsureOnly || areaUnsure) {
+    const field = areaUnsure ? "area" : mapAskedField(lastAskedField) || "budget";
     unsure.push(field);
     intents.push("unsure");
     if (field === "area") {
@@ -136,7 +141,7 @@ export function understandMessageLocally(message, { buyer = null, lastAskedField
   const putDown = text.match(
     /\b(?:put\s+down|deposit|down\s*payment|initial)\b[\s\w]{0,24}?(?:about|around|roughly)?\s*(?:AED|Dhs|Dh)?\s*(\d[\d,]*(?:\.\d+)?\s*[MmKk]?)/i
   ) || text.match(
-    /\b(?:about|around|roughly)\s*(?:AED|Dhs|Dh)?\s*(\d[\d,]*(?:\.\d+)?\s*[Kk])\b(?=.*\b(put|down|cash|initial|deposit)\b)/i
+    /\b(?:about|around|roughly)\s*(?:AED|Dhs|Dh)?\s*(\d[\d,]*(?:\.\d+)?\s*[MmKk]?)\b(?=[\s\w,]{0,36}\b(?:put|down|cash|initial|deposit)\b)/i
   );
   if (putDown) {
     const amount = parseMoney(putDown[1]);

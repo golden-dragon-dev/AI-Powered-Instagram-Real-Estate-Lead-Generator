@@ -308,7 +308,7 @@ function extractBedrooms(text) {
   const multi = text.match(
     /\b(?:studio|\d+)\s*(?:br|bed(?:room)?s?)?\s*(?:or|\/|,|and)\s*(?:studio|\d+)\s*(?:br|bed(?:room)?s?)?\b/i
   );
-  if (multi) {
+  if (multi && /\b(?:studio|br|bed)/i.test(multi[0])) {
     const beds = [];
     if (/\bstudio\b/i.test(multi[0])) beds.push(0);
     for (const part of multi[0].matchAll(/\b(\d+)\b/g)) {
@@ -365,10 +365,15 @@ function extractFinancing(text) {
 }
 
 function extractUseType(text) {
-  if (/\binvest(ment|or)?\b/i.test(text) || /\brental\s+yield\b/i.test(text)) return "investment";
-  if (/\bend\s*use\b/i.test(text) || /\blive\s+in\b/i.test(text) || /\bfor\s+(my\s+)?family\b/i.test(text)) {
+  if (
+    /\bend\s*use\b/i.test(text) ||
+    /\blive\s+in\b/i.test(text) ||
+    /\bfor\s+(my\s+)?family\b/i.test(text) ||
+    /\bnot\s+(?:an?\s+)?investment\b/i.test(text)
+  ) {
     return "end_use";
   }
+  if (/\binvest(ment|or)?\b/i.test(text) || /\brental\s+yield\b/i.test(text)) return "investment";
   return USE_TYPES.includes(text) ? text : null;
 }
 
