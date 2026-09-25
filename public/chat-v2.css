@@ -1,12 +1,12 @@
 :root {
-  --background: #181818;
-  --surface: #ffffff;
-  --text: #161616;
-  --secondary: #737373;
-  --border: #dbdbdb;
-  --soft: #efefef;
-  --blue: #0095f6;
-  --blue-dark: #0077c8;
+  --background: #000000;
+  --surface: #000000;
+  --text: #ffffff;
+  --secondary: #a3a3a3;
+  --border: #333333;
+  --soft: #232323;
+  --blue: #ffffff;
+  --blue-dark: #d4d4d4;
 }
 
 * {
@@ -111,7 +111,7 @@ button {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid var(--border);
+  border: 1px solid #454545;
   border-radius: 6px;
   background: var(--surface);
 }
@@ -144,10 +144,10 @@ button {
   flex: 0 0 auto;
   display: grid;
   place-items: center;
-  border: 1px solid #d0d0d0;
+  border: 1px solid #505050;
   border-radius: 50%;
-  background: #f0f0f0;
-  color: #333333;
+  background: #161616;
+  color: #ffffff;
   font-size: 14px;
   font-weight: 600;
 }
@@ -176,13 +176,13 @@ button {
   padding: 7px 0 7px 8px;
   border: 0;
   background: transparent;
-  color: #333333;
+  color: #ffffff;
   font-size: 12px;
   font-weight: 500;
 }
 
 .icon-btn:hover {
-  color: var(--blue-dark);
+  color: #bdbdbd;
 }
 
 .settings {
@@ -190,7 +190,7 @@ button {
   gap: 11px;
   padding: 14px 16px;
   border-bottom: 1px solid var(--border);
-  background: #fafafa;
+  background: #111111;
 }
 
 .settings[hidden],
@@ -204,7 +204,7 @@ button {
 .settings label {
   display: grid;
   gap: 5px;
-  color: #555555;
+  color: #bdbdbd;
   font-size: 12px;
 }
 
@@ -237,7 +237,7 @@ button {
   border: 1px solid var(--border);
   border-radius: 3px;
   background: var(--surface);
-  color: #333333;
+  color: #ffffff;
   font-size: 12px;
   font-weight: 500;
 }
@@ -287,7 +287,7 @@ button {
 
 .row.you .bubble {
   background: var(--blue);
-  color: #ffffff;
+  color: #000000;
 }
 
 .meta-line {
@@ -313,7 +313,7 @@ button {
   min-height: 36px;
   flex: 0 0 auto;
   padding: 0 13px;
-  border: 1px solid #a8d6f4;
+  border: 1px solid #666666;
   border-radius: 18px;
   background: var(--surface);
   color: var(--blue-dark);
@@ -323,7 +323,7 @@ button {
 }
 
 .choices button:hover {
-  background: #f5fbff;
+  background: #171717;
 }
 
 .call-request {
@@ -361,6 +361,7 @@ button {
   border: 1px solid var(--border);
   border-radius: 3px;
   color: var(--text);
+  background: #0a0a0a;
 }
 
 .call-request-row button {
@@ -369,7 +370,7 @@ button {
   border: 0;
   border-radius: 3px;
   background: var(--blue);
-  color: #ffffff;
+  color: #000000;
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
@@ -403,7 +404,7 @@ button {
 .call-request-row input:focus,
 .composer input:focus {
   outline: none;
-  border-color: #a8a8a8;
+  border-color: #ffffff;
 }
 
 .composer button {
@@ -417,7 +418,7 @@ button {
 }
 
 .composer button:hover {
-  color: var(--blue-dark);
+  color: #bdbdbd;
 }
 
 .buyer-panel {
@@ -457,7 +458,7 @@ button {
 
 @media (max-width: 480px) {
   body {
-    background: var(--surface);
+    background: #000000;
   }
 
   .page {
