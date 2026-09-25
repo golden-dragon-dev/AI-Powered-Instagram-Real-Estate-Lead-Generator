@@ -3,6 +3,7 @@ import test from "node:test";
 import { PropertyService } from "../src/services/property-service.js";
 import { YAS_MATCH_CRITERIA } from "../src/store/airtable-schema.js";
 import { createSeededAirtableStore } from "../src/store/create-store.js";
+import { AirtableStore } from "../src/store/airtable-store.js";
 import { runAirtableMilestoneChecks } from "../scripts/airtable-demo.js";
 
 test("step 7a matching reads Airtable records not seed JSON ids", async () => {
@@ -13,6 +14,16 @@ test("step 7a matching reads Airtable records not seed JSON ids", async () => {
   assert.equal(store.units.length, seed.units.length);
   assert.ok(store.developers.every((row) => row.id.startsWith("rec")));
   assert.equal(store.developers.some((row) => row.id === "dev_aldar"), false);
+});
+
+test("step 7g Airtable buyer memory honors Railway runtime volume", () => {
+  const store = new AirtableStore({
+    AIRTABLE_API_KEY: "test",
+    AIRTABLE_BASE_ID: "app-test",
+    RUNTIME_DATA_DIR: "/data/runtime",
+    fetch: async () => ({ ok: true, json: async () => ({ records: [] }) })
+  });
+  assert.equal(store.runtimeDir, "/data/runtime");
 });
 
 test("step 7b Yas 3M query uses Airtable unit prices", async () => {

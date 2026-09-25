@@ -241,6 +241,7 @@ const server = http.createServer(async (req, res) => {
           budgetAed: result.buyer.budgetAed,
           cashAvailableAed: result.buyer.cashAvailableAed,
           preferredAreas: result.buyer.preferredAreas,
+          openToOtherAreas: Boolean(result.buyer.openToOtherAreas),
           bedrooms: result.buyer.bedrooms,
           propertyTypes: result.buyer.propertyTypes,
           financing: result.buyer.financing,

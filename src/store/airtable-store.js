@@ -33,7 +33,7 @@ export class AirtableStore {
     this.apiKey = env.AIRTABLE_API_KEY;
     this.baseId = env.AIRTABLE_BASE_ID;
     this.fetchFn = env.fetch || fetch;
-    this.runtimeDir = env.runtimeDir || RUNTIME_DIR;
+    this.runtimeDir = env.runtimeDir || env.RUNTIME_DATA_DIR || RUNTIME_DIR;
     this.tables = {
       developers: env.AIRTABLE_DEVELOPERS_TABLE || "Developers",
       projects: env.AIRTABLE_PROJECTS_TABLE || "Projects",
