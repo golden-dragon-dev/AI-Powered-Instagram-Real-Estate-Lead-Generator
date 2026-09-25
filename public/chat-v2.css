@@ -1,5 +1,5 @@
 :root {
-  --background: #fafafa;
+  --background: #181818;
   --surface: #ffffff;
   --text: #161616;
   --secondary: #737373;
@@ -51,7 +51,7 @@ button {
 
 .eyebrow {
   margin: 0 0 12px;
-  color: var(--secondary);
+  color: #a8a8a8;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -60,6 +60,7 @@ button {
 
 .aside h1 {
   margin: 0;
+  color: #ffffff;
   font-size: 28px;
   font-weight: 600;
   letter-spacing: -0.025em;
@@ -68,14 +69,14 @@ button {
 
 .lede {
   margin: 12px 0 0;
-  color: #505050;
+  color: #d0d0d0;
   font-size: 15px;
   line-height: 1.55;
 }
 
 .details {
   margin: 32px 0 0;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid #3b3b3b;
 }
 
 .details div {
@@ -83,23 +84,23 @@ button {
   grid-template-columns: 104px 1fr;
   gap: 12px;
   padding: 11px 0;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid #3b3b3b;
   font-size: 13px;
 }
 
 .details dt {
-  color: var(--secondary);
+  color: #a8a8a8;
 }
 
 .details dd {
   margin: 0;
-  color: #303030;
+  color: #ffffff;
   font-weight: 500;
 }
 
 .preview-note {
   margin: 18px 0 0;
-  color: var(--secondary);
+  color: #a8a8a8;
   font-size: 12px;
   line-height: 1.5;
 }
