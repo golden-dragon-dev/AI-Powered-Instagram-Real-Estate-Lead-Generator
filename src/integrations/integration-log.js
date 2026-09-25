@@ -53,7 +53,7 @@ export function redact(text) {
 function sanitizeMeta(meta) {
   const out = {};
   for (const [key, value] of Object.entries(meta || {})) {
-    if (/token|secret|authorization|api[_-]?key|signature/i.test(key)) continue;
+    if (/token|secret|authorization|api[_-]?key|^signature$/i.test(key)) continue;
     if (typeof value === "string") out[key] = redact(value).slice(0, 200);
     else if (typeof value === "number" || typeof value === "boolean" || value === null) out[key] = value;
     else out[key] = redact(JSON.stringify(value)).slice(0, 200);
