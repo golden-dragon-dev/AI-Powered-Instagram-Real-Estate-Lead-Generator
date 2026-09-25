@@ -4,24 +4,20 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>The Sustainable Bot · Conversation preview</title>
-  <link rel="stylesheet" href="/chat.css" />
+  <link rel="stylesheet" href="/chat-v2.css" />
 </head>
 <body>
   <div class="page">
     <aside class="aside">
-      <div class="workspace-label">Internal preview</div>
+      <p class="eyebrow">Conversation preview</p>
       <h1>The Sustainable Bot</h1>
-      <p class="lede">
-        Test the Instagram conversation before it goes to a buyer.
-      </p>
-      <div class="status-list">
-        <p><span class="status-dot"></span> Property facts from Airtable</p>
-        <p><span class="status-dot"></span> Buyer details remembered</p>
-        <p><span class="status-dot"></span> Call requests require a phone number</p>
-      </div>
-      <p class="preview-note">
-        This is a private test screen. A conversation only becomes a lead after the buyer submits Request Call.
-      </p>
+      <p class="lede">Use this screen to check the buyer experience before testing it on Instagram.</p>
+      <dl class="details">
+        <div><dt>Channel</dt><dd>Instagram</dd></div>
+        <div><dt>Property data</dt><dd>Airtable</dd></div>
+        <div><dt>Human handoff</dt><dd>Request Call submitted</dd></div>
+      </dl>
+      <p class="preview-note">Buyer interest stays in the conversation. A lead is created only after a phone number is submitted.</p>
     </aside>
 
     <main class="phone" aria-label="Instagram conversation preview">
@@ -30,7 +26,7 @@
           <span class="avatar" aria-hidden="true">S</span>
           <div>
             <strong>thesustainablebot</strong>
-            <span>Instagram conversation preview</span>
+            <span>Instagram</span>
           </div>
         </div>
         <button type="button" id="settingsToggle" class="icon-btn" aria-expanded="false" aria-controls="settings">
