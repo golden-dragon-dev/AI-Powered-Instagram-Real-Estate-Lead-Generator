@@ -16,7 +16,10 @@ export function createAnthropicClient(options = {}) {
   };
 }
 
-export async function polishReplyWithModel(client, { buyer, packs, draftText, intents }) {
+export async function polishReplyWithModel(
+  client,
+  { buyer, packs, draftText, intents, requiredQuestion = null }
+) {
   if (!client?.apiKey) return null;
 
   const packSummary = packs.map((pack) => ({
@@ -52,6 +55,7 @@ export async function polishReplyWithModel(client, { buyer, packs, draftText, in
     "Use ONLY numbers, dates, plans, and availability from the provided fact packs.",
     "If a field is null, say it is not confirmed yet. Never invent prices.",
     "Do not add projects that are not in the fact packs.",
+    "If requiredQuestion is present, include that exact question once at the end.",
     "Keep under 120 words."
   ].join(" ");
 
@@ -65,7 +69,8 @@ export async function polishReplyWithModel(client, { buyer, packs, draftText, in
       financing: buyer.financing
     },
     factPacks: packSummary,
-    draftReply: draftText
+    draftReply: draftText,
+    requiredQuestion
   });
 
   try {
@@ -91,7 +96,11 @@ export async function polishReplyWithModel(client, { buyer, packs, draftText, in
       .map((block) => block.text)
       .join("\n")
       .trim();
-    return text || null;
+    if (!text) return null;
+    if (requiredQuestion && !text.includes(requiredQuestion)) {
+      return `${text}\n\n${requiredQuestion}`;
+    }
+    return text;
   } catch {
     return null;
   }

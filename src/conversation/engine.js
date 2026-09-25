@@ -259,12 +259,13 @@ export class ConversationEngine {
 
     this.memory.setLastAskedField(instagramUserId, draft.nextQuestion?.field || null);
 
-    if (this.llm && options.useLlm !== false && packs.length && draft.stage !== "qualifying") {
+    if (this.llm && options.useLlm !== false) {
       const polished = await polishReplyWithModel(this.llm, {
         buyer,
         packs,
         draftText: draft.text,
-        intents
+        intents,
+        requiredQuestion: draft.nextQuestion?.prompt || null
       });
       if (polished) draft = { ...draft, text: polished, polished: true };
     }

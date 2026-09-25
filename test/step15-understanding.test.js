@@ -3,6 +3,7 @@ import test from "node:test";
 import { setupConversation } from "./helpers.js";
 import { understandMessageLocally, mergeUnderstanding } from "../src/conversation/understand.js";
 import { extractFactsFromMessage } from "../src/conversation/extract.js";
+import { polishReplyWithModel } from "../src/conversation/llm.js";
 
 test("step 15a not sure on budget offers ranges instead of repeating", async () => {
   const { engine } = await setupConversation();
@@ -86,4 +87,37 @@ test("step 15h local typo I dknt know maps to the last asked field", () => {
   assert.ok(local.unsure.includes("area"));
   assert.equal(local.facts.openToOtherAreas, true);
   assert.ok(local.signals.includes("area_flexible"));
+});
+
+test("step 15i Claude polish preserves the code-owned next question", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    async json() {
+      return { content: [{ type: "text", text: "AED 2M gives us a useful starting point." }] };
+    }
+  });
+  try {
+    const question = "Which area are you leaning toward?";
+    const reply = await polishReplyWithModel(
+      { apiKey: "test", model: "claude-sonnet-5", baseUrl: "https://example.test" },
+      {
+        buyer: {
+          budgetAed: 2_000_000,
+          cashAvailableAed: null,
+          preferredAreas: [],
+          bedrooms: [],
+          financing: "unknown"
+        },
+        packs: [],
+        draftText: `Got it, your budget is around AED 2,000,000.\n\n${question}`,
+        intents: ["provide_facts"],
+        requiredQuestion: question
+      }
+    );
+    assert.match(reply, /useful starting point/);
+    assert.ok(reply.endsWith(question));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
