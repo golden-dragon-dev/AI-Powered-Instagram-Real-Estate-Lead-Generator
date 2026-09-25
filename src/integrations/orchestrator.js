@@ -5,6 +5,13 @@ import { upsertHubSpotContact } from "./hubspot.js";
 import { parseInstagramMessages, sendInstagramText, verifySignature, verifyWebhookChallenge } from "./meta.js";
 import { runtimeRoot } from "./json-store.js";
 
+export function messageEventAgeMs(event, now = Date.now()) {
+  const raw = Number(event?.timestamp);
+  if (!Number.isFinite(raw) || raw <= 0) return null;
+  const timestampMs = raw < 1_000_000_000_000 ? raw * 1000 : raw;
+  return Math.max(0, now - timestampMs);
+}
+
 /**
  * Milestone 3 orchestrator: webhook -> engine -> HubSpot -> IG reply.
  * WhatsApp alerts fire only after Request a Call + phone submit.
@@ -105,6 +112,26 @@ export class IntegrationOrchestrator {
     });
     if (!claimed) {
       return { duplicate: true, mid };
+    }
+
+    const maxAgeMs = Number(this.env.META_MAX_EVENT_AGE_MS || 5 * 60 * 1000);
+    const ageMs = messageEventAgeMs(event);
+    if (ageMs !== null && Number.isFinite(maxAgeMs) && maxAgeMs >= 0 && ageMs > maxAgeMs) {
+      await this.events.complete(mid, {
+        skipped: true,
+        skipReason: "stale_message",
+        ageMs
+      });
+      await this.log.record({
+        correlationId: mid,
+        integration: "meta",
+        operation: "message",
+        status: "skipped",
+        message: "stale_message",
+        retryable: false,
+        meta: { senderId: event.senderId, ageMs }
+      });
+      return { duplicate: false, skipped: true, reason: "stale_message", mid, ageMs };
     }
 
     try {

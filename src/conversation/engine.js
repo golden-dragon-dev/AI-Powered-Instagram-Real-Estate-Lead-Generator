@@ -70,6 +70,15 @@ export class ConversationEngine {
 
     const merged = mergeUnderstanding(base, understanding);
     let { facts, signals, intents, unsure, ack } = merged;
+    // "I don't know" after an area question means area-flexible, not "ask area again".
+    // Enforce this in code even if the optional model omits openToOtherAreas.
+    if (unsure.includes("area") && !(facts.area || facts.areas)) {
+      facts.openToOtherAreas = true;
+      signals = [...new Set([...signals, "area_flexible"])];
+    }
+    if ((facts.area || facts.areas) && facts.openToOtherAreas !== true) {
+      facts.openToOtherAreas = false;
+    }
     const refined = refineTurnIntent({ intents, signals, facts, message: text });
     facts = refined.facts;
     signals = refined.signals;
@@ -117,6 +126,23 @@ export class ConversationEngine {
     if (facts.financing) updatedFields.push("financing");
     if (facts.preferredContactChannel) updatedFields.push("contact_channel");
     if (facts.noCalls === true) updatedFields.push("no_calls");
+
+    if (!ack) {
+      const acknowledgements = [];
+      if (facts.budget !== undefined && Number.isFinite(Number(facts.budget))) {
+        acknowledgements.push(
+          `your budget is around AED ${Number(facts.budget).toLocaleString("en-US")}`
+        );
+      }
+      if (facts.cash !== undefined && Number.isFinite(Number(facts.cash))) {
+        acknowledgements.push(
+          `you have around AED ${Number(facts.cash).toLocaleString("en-US")} for the initial payment`
+        );
+      }
+      if (acknowledgements.length) {
+        ack = `Got it, ${acknowledgements.join(" and ")}.`;
+      }
+    }
 
     const pendingOffer = this.memory.getPendingOffer(instagramUserId);
     if (isAffirmation(text) && pendingOffer) {

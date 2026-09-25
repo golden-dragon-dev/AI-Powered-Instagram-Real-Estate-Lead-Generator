@@ -125,8 +125,15 @@ export function buildConversationReply({
     return finish(lines, "qualifying", nextQuestion, null);
   }
 
-  if (unsure.length || intents.includes("unsure")) {
-    const unsureReply = buildUnsureFollowUp(buyer, unsure);
+  const unresolvedUnsure = unsure.filter(
+    (field) =>
+      !(
+        field === "area" &&
+        (buyer.openToOtherAreas || buyer.intentSignals?.includes("area_flexible"))
+      )
+  );
+  if (unresolvedUnsure.length || (intents.includes("unsure") && !unsure.includes("area"))) {
+    const unsureReply = buildUnsureFollowUp(buyer, unresolvedUnsure);
     if (unsureReply.text) lines.push(unsureReply.text);
     nextQuestion = unsureReply.nextQuestion;
     return finish(lines, "qualifying", nextQuestion, null);
@@ -200,7 +207,7 @@ export function buildConversationReply({
     includeFinancing: false
   });
   if (!buyer.budgetAed) {
-    if (!ack) lines.push("What budget are you working with?");
+    lines.push("What budget are you working with?");
     nextQuestion = question || {
       field: "budgetAed",
       prompt: "What budget are you working with?",
@@ -209,14 +216,18 @@ export function buildConversationReply({
     if (!nextQuestion.choices) nextQuestion = { ...nextQuestion, choices: budgetRangeChoices() };
   } else if (!(buyer.preferredAreas?.length || buyer.projectInterest)) {
     const areaGroup = choicesForField("preferredAreas");
-    if (!ack) lines.push("Which area are you leaning toward?");
+    lines.push(
+      buyer.openToOtherAreas || buyer.intentSignals?.includes("area_flexible")
+        ? question?.prompt || "What size works best for you?"
+        : "Which area are you leaning toward?"
+    );
     nextQuestion = question || {
       field: "preferredAreas",
       prompt: "Which area are you leaning toward?",
       choices: areaGroup?.choices || null
     };
   } else {
-    if (!ack) lines.push(question?.prompt || "What size are you after?");
+    lines.push(question?.prompt || "What size are you after?");
     nextQuestion = question;
   }
 
@@ -327,7 +338,9 @@ function buildContextualFollowUp(buyer, matches, packs, { lastAskedField = null,
     }
 
     const labels = beds.map((n) => (n === 0 ? "studio" : `${n}BR`));
-    const prompt = `Are you looking for ${labels.slice(0, -1).join(", ")} or ${labels.at(-1)}, or should I show you both?`;
+    const compareLabel =
+      beds.length === 2 ? "should I show you both" : "should I compare the available sizes";
+    const prompt = `Are you looking for ${labels.slice(0, -1).join(", ")} or ${labels.at(-1)}, or ${compareLabel}?`;
     return {
       text: prompt,
       nextQuestion: {

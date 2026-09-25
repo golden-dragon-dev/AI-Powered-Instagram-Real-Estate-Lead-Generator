@@ -11,7 +11,7 @@ import {
   wantsCallRequest,
   buildCallRequestSummary
 } from "../src/conversation/intent-policy.js";
-import { IntegrationOrchestrator } from "../src/integrations/orchestrator.js";
+import { IntegrationOrchestrator, messageEventAgeMs } from "../src/integrations/orchestrator.js";
 import { ProcessedEventStore } from "../src/integrations/processed-events.js";
 import { AlertLedger, CallRequestStore } from "../src/integrations/whatsapp.js";
 import { IntegrationLog } from "../src/integrations/integration-log.js";
@@ -286,4 +286,33 @@ test("step 19o alert gate requires submitted phone", () => {
     ),
     /CALL REQUEST[\s\S]*Phone: \+971501234567/
   );
+});
+
+test("step 19p stale Meta retries do not generate late duplicate replies", async () => {
+  const rootDir = await mkdtemp(path.join(os.tmpdir(), "m3-stale-"));
+  let engineCalls = 0;
+  const orchestrator = new IntegrationOrchestrator({
+    engine: {
+      async handleMessage() {
+        engineCalls += 1;
+        throw new Error("stale messages must not reach the engine");
+      }
+    },
+    rootDir,
+    env: { META_MAX_EVENT_AGE_MS: "300000" },
+    log: new IntegrationLog({ rootDir }),
+    events: new ProcessedEventStore({ rootDir })
+  });
+
+  const outcome = await orchestrator.processMessageEvent({
+    mid: "mid_stale_1",
+    senderId: "ig_stale",
+    text: "Hi",
+    timestamp: Date.now() - 10 * 60 * 1000
+  });
+
+  assert.equal(outcome.skipped, true);
+  assert.equal(outcome.reason, "stale_message");
+  assert.equal(engineCalls, 0);
+  assert.ok(messageEventAgeMs({ timestamp: Date.now() - 1000 }) >= 900);
 });

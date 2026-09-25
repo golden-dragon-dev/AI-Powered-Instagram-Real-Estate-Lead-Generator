@@ -33,7 +33,12 @@ export function qualificationGaps(
   { includeCash = false, includeFinancing = false, includeContact = false, includeUseType = false } = {}
 ) {
   const missing = [];
-  const hasAreaOrProject = Boolean(buyer.preferredAreas?.length || buyer.projectInterest);
+  const hasAreaOrProject = Boolean(
+    buyer.preferredAreas?.length ||
+      buyer.projectInterest ||
+      buyer.openToOtherAreas ||
+      buyer.intentSignals?.includes("area_flexible")
+  );
   const hasTypeOrBeds = Boolean(buyer.propertyTypes?.length || (buyer.bedrooms && buyer.bedrooms.length));
 
   if (buyer.budgetAed === null || buyer.budgetAed === undefined) missing.push("budgetAed");

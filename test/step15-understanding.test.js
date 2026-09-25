@@ -60,3 +60,30 @@ test("step 15f local understand merges with regex extract", () => {
   assert.ok(merged.intents.includes("unsure"));
   assert.equal(merged.facts.bedrooms, 2);
 });
+
+test("step 15g unknown area becomes flexible and does not loop", async () => {
+  const { engine } = await setupConversation();
+  await engine.handleMessage("ig_m2_u7", "2M");
+  await engine.handleMessage("ig_m2_u7", "But I have like 300k for down payment");
+  const result = await engine.handleMessage("ig_m2_u7", "I dknt know");
+
+  assert.equal(result.buyer.budgetAed, 2_000_000);
+  assert.equal(result.buyer.cashAvailableAed, 300_000);
+  assert.ok(
+    result.buyer.openToOtherAreas ||
+      result.buyer.intentSignals?.includes("area_flexible")
+  );
+  assert.doesNotMatch(result.reply, /Which area are you leaning toward/i);
+  assert.doesNotMatch(result.reply, /Any area you want to start with/i);
+  assert.match(result.reply, /size|studio|bedroom|property type/i);
+  assert.equal(result.nextQuestion?.field, "propertyTypes");
+});
+
+test("step 15h local typo I dknt know maps to the last asked field", () => {
+  const local = understandMessageLocally("I dknt know", {
+    lastAskedField: "preferredAreas"
+  });
+  assert.ok(local.unsure.includes("area"));
+  assert.equal(local.facts.openToOtherAreas, true);
+  assert.ok(local.signals.includes("area_flexible"));
+});

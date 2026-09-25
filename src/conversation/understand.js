@@ -18,7 +18,8 @@ const UNDERSTAND_SYSTEM = [
   "- If buyer says 1 or 2 bed / 1 or 2 bedrooms, set bedrooms to [1,2].",
   "- Extract any clearly named Abu Dhabi area, including Yas Island, Saadiyat Island, Hudayriyat Island, Al Reem Island, Masdar City, Al Raha Beach, Al Maryah Island, Khalifa City, and Al Reef.",
   "- Canonicalize Masdar as Masdar City. If buyer says what about Masdar, forget Yas, or switch to Reem, set area to the newly requested area only.",
-  "- If buyer says not sure / unsure / idk about a field, put that field name in unsure (budget, cash, area, bedrooms, financing) and leave facts for that field null.",
+  "- If buyer says not sure / unsure / idk / I don't know about a field, put that field name in unsure (budget, cash, area, bedrooms, financing) and leave facts for that field null.",
+  "- If the buyer does not know the area, also set openToOtherAreas true so the conversation moves forward across Abu Dhabi instead of asking area again.",
   "- If open to other areas while preferring one, set area plus openToOtherAreas true.",
   "- intents may include greet, unsure, search, correction, decline_contact, high_intent, reserve, viewing, ask_facts, continue, start_fresh.",
   "- ack is one short natural sentence acknowledging the update with NO prices, projects, or commercial claims. null if nothing useful.",
@@ -91,20 +92,26 @@ export function understandMessageLocally(message, { buyer = null, lastAskedField
   }
 
   const unsureOnly =
-    /^(not sure|unsure|i'?m not sure|not really sure|idk|i don'?t know|dont know|no idea|maybe later|skip)([.!?]*)$/i.test(
+    /^(not sure|unsure|i'?m not sure|not really sure|idk|i dkn?t know|i don'?t know|dont know|do not know|no idea|not bothered|anywhere|you choose|maybe later|skip)([.!?]*)$/i.test(
       text
     ) ||
-    (/^\s*(not sure|unsure)\b/i.test(text) && text.length < 48 && !/\d/.test(text));
+    (/^\s*(not sure|unsure|i dkn?t know|i don'?t know|dont know|no idea)\b/i.test(text) &&
+      text.length < 48 &&
+      !/\d/.test(text));
 
   if (unsureOnly) {
     const field = mapAskedField(lastAskedField) || "budget";
     unsure.push(field);
     intents.push("unsure");
+    if (field === "area") {
+      facts.openToOtherAreas = true;
+      signals.push("area_flexible");
+    }
     ack =
       field === "budget"
         ? "No problem if the budget is still open."
         : field === "area"
-          ? "No problem if the area is still open."
+          ? "No problem. I’ll keep the area flexible across Abu Dhabi."
           : field === "bedrooms"
             ? "No problem if the size is still open."
             : field === "cash"

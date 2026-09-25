@@ -51,8 +51,15 @@ export function resolveMatches(catalog, buyer) {
 }
 
 export function canPitchBuyer(buyer) {
+  const hasSpecificLocation = Boolean(
+    buyer.preferredAreas?.length || buyer.projectInterest || buyer.developerInterest
+  );
+  const areaFlexible = Boolean(
+    buyer.openToOtherAreas || buyer.intentSignals?.includes("area_flexible")
+  );
+  const hasSize = Boolean(buyer.propertyTypes?.length || buyer.bedrooms?.length);
   return Boolean(
-    buyer.budgetAed && (buyer.preferredAreas?.length || buyer.projectInterest || buyer.developerInterest)
+    buyer.budgetAed && (hasSpecificLocation || (areaFlexible && hasSize))
   );
 }
 

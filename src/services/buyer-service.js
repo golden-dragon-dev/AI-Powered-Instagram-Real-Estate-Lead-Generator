@@ -75,6 +75,8 @@ export function buyerFromKnownFacts(instagramUserId, facts = {}) {
   if (facts.cash !== undefined) patch.cashAvailableAed = parseMoney(facts.cash);
   if (facts.area) patch.preferredAreas = [normalizeArea(facts.area)].filter(Boolean);
   if (facts.areas) patch.preferredAreas = facts.areas.map(normalizeArea).filter(Boolean);
+  if (facts.openToOtherAreas === true) patch.openToOtherAreas = true;
+  if (facts.openToOtherAreas === false) patch.openToOtherAreas = false;
   if (facts.emirate) patch.preferredEmirate = facts.emirate;
   if (facts.developer) patch.developerInterest = normalizeDeveloper(facts.developer);
   if (facts.project) patch.projectInterest = facts.project;
