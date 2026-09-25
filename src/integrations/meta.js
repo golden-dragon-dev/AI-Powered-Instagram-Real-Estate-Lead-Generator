@@ -168,3 +168,31 @@ export async function subscribeInstagramMessaging({
   }
   return { skipped: false, ok: Boolean(body.success ?? true), body };
 }
+
+export async function getInstagramAccountIdentity({
+  env = process.env,
+  fetchImpl = fetch
+} = {}) {
+  const config = metaConfig(env);
+  if (!config.pageAccessToken || !isInstagramUserToken(config.pageAccessToken)) {
+    return { skipped: true, reason: "missing_instagram_user_token" };
+  }
+  const igBase = env.META_IG_GRAPH_BASE_URL || "https://graph.instagram.com";
+  const url = `${igBase}/${config.graphVersion}/me?fields=id,username,account_type`;
+  const response = await fetchImpl(url, {
+    headers: { authorization: `Bearer ${config.pageAccessToken}` }
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const detail = body?.error?.message || response.statusText || "identity lookup failed";
+    const error = new Error(detail);
+    error.status = response.status;
+    throw error;
+  }
+  return {
+    skipped: false,
+    id: body.id || null,
+    username: body.username || null,
+    accountType: body.account_type || null
+  };
+}

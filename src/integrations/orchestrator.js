@@ -78,7 +78,9 @@ export class IntegrationOrchestrator {
       meta: {
         object: payload?.object || null,
         entryCount: Array.isArray(payload?.entry) ? payload.entry.length : 0,
-        messageCount: messages.length
+        messageCount: messages.length,
+        entryIds: [...new Set(messages.map((message) => message.entryId).filter(Boolean))],
+        senderIds: [...new Set(messages.map((message) => message.senderId).filter(Boolean))]
       }
     });
 

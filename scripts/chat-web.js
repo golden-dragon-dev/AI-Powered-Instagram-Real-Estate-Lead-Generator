@@ -13,7 +13,7 @@ import { DurableConversationMemory } from "../src/integrations/durable-memory.js
 import { IntegrationOrchestrator } from "../src/integrations/orchestrator.js";
 import { IntegrationLog } from "../src/integrations/integration-log.js";
 import { runtimeRoot } from "../src/integrations/json-store.js";
-import { subscribeInstagramMessaging } from "../src/integrations/meta.js";
+import { getInstagramAccountIdentity, subscribeInstagramMessaging } from "../src/integrations/meta.js";
 
 loadEnv();
 
@@ -327,5 +327,14 @@ server.listen(PORT, HOST, () => {
     })
     .catch((error) => {
       console.warn(`Instagram messaging subscribe failed: ${error.message}`);
+    });
+
+  getInstagramAccountIdentity({ env: process.env })
+    .then((result) => {
+      if (result.skipped) return;
+      console.log(`Instagram token account: ${result.username || "unknown"} (${result.id || "unknown"})`);
+    })
+    .catch((error) => {
+      console.warn(`Instagram token identity lookup failed: ${error.message}`);
     });
 });
