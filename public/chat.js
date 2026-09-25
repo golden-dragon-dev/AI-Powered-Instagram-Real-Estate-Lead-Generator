@@ -15,6 +15,7 @@ const clearKeyBtn = document.getElementById("clearKeyBtn");
 const buyerPanel = document.getElementById("buyerPanel");
 const settings = document.getElementById("settings");
 const settingsToggle = document.getElementById("settingsToggle");
+const runtimeKeyControls = document.querySelectorAll(".runtime-key-control");
 
 const SESSION_KEY = "harbour_desk_test_user";
 
@@ -100,12 +101,15 @@ function renderChoices(nextQuestion) {
 
 function renderClaudeStatus(data) {
   if (!claudeStatus) return;
+  for (const control of runtimeKeyControls) {
+    control.hidden = !data?.runtimeKeyAllowed;
+  }
   if (data?.claudeEnabled) {
-    const hint = data.keyHint ? ` (${data.keyHint})` : "";
-    claudeStatus.textContent = `Claude is on${hint}. Replies will use it when there is a project to talk about.`;
+    claudeStatus.textContent = "Natural conversation is enabled.";
+  } else if (!data?.runtimeKeyAllowed) {
+    claudeStatus.textContent = "Natural conversation is not configured on this deployment.";
   } else {
-    claudeStatus.textContent =
-      "Claude is off. Paste your Anthropic key above and tap Save key. Do not send the key in chat.";
+    claudeStatus.textContent = "Add the Anthropic key here to test natural conversation locally.";
   }
 }
 
@@ -152,15 +156,7 @@ async function sendMessage(text) {
     return;
   }
 
-  const metaParts = [];
-  if (data.matchCount) metaParts.push(`${data.matchCount} match${data.matchCount === 1 ? "" : "es"}`);
-  if (data.understandingSource === "claude") metaParts.push("understood");
-  if (data.claudeUsed) metaParts.push("Claude");
-  else if (data.claudeEnabled === false) metaParts.push("templates only");
-  if (data.factCheckOk === false) metaParts.push("fact check blocked");
-  if (data.leadStatus && data.leadStatus !== "new") metaParts.push(data.leadStatus.replaceAll("_", " "));
-
-  addBubble("bot", data.reply, metaParts.join(" · "));
+  addBubble("bot", data.reply);
   renderChoices(data.nextQuestion);
   renderCallRequest(data.callRequest);
 }
@@ -173,7 +169,7 @@ async function submitCallRequest() {
     return;
   }
 
-  addBubble("you", `Request Call · ${phone}`);
+  addBubble("you", "Request a call");
   const response = await fetch("/api/call-request", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -187,11 +183,7 @@ async function submitCallRequest() {
 
   hideCallRequest();
   choicesEl.hidden = true;
-  addBubble(
-    "bot",
-    data.reply,
-    data.alertRecommended ? "call requested · advisor notified" : "call requested"
-  );
+  addBubble("bot", data.reply);
 }
 
 function startFreshUi() {
@@ -201,7 +193,7 @@ function startFreshUi() {
   clearThread();
   addBubble(
     "bot",
-    "Hi. I can help with Abu Dhabi listings from the approved list.\n\nShare a budget, area, or bedroom count whenever you are ready."
+    "Hi, happy to help. Tell me what you’re looking for in Abu Dhabi, or share your budget and I’ll suggest a few options."
   );
   messageInput.focus();
 }
@@ -268,7 +260,7 @@ ensureSessionId();
 refreshClaudeStatus();
 addBubble(
   "bot",
-  "Hi. I can help with Abu Dhabi listings from the approved list.\n\nShare a budget, area, or bedroom count whenever you are ready."
+  "Hi, happy to help. Tell me what you’re looking for in Abu Dhabi, or share your budget and I’ll suggest a few options."
 );
 
 messageInput.focus();

@@ -54,7 +54,8 @@ function llmStatus() {
   return {
     claudeEnabled: enabled,
     model: enabled ? llm.model : null,
-    keyHint: enabled && key.length >= 4 ? `…${key.slice(-4)}` : null
+    keyHint: enabled && key.length >= 4 ? `…${key.slice(-4)}` : null,
+    runtimeKeyAllowed: ALLOW_RUNTIME_LLM_KEY
   };
 }
 
