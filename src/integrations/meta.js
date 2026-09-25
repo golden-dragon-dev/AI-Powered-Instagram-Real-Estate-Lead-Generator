@@ -25,15 +25,24 @@ export function verifyWebhookChallenge(query, env = process.env) {
 }
 
 export function verifySignature(rawBody, signatureHeader, env = process.env) {
-  const secret = metaConfig(env).appSecret;
-  if (!secret) return false;
   const provided = String(signatureHeader || "");
   if (!provided.startsWith("sha256=")) return false;
-  const expected = `sha256=${crypto.createHmac("sha256", secret).update(rawBody).digest("hex")}`;
-  const a = Buffer.from(expected);
-  const b = Buffer.from(provided);
-  if (a.length !== b.length) return false;
-  return crypto.timingSafeEqual(a, b);
+
+  const bodyBuf = Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(String(rawBody || ""), "utf8");
+  const secrets = [
+    env.META_APP_SECRET,
+    env.META_APP_SECRET_ALT
+  ]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+
+  for (const secret of [...new Set(secrets)]) {
+    const expected = `sha256=${crypto.createHmac("sha256", secret).update(bodyBuf).digest("hex")}`;
+    const a = Buffer.from(expected);
+    const b = Buffer.from(provided);
+    if (a.length === b.length && crypto.timingSafeEqual(a, b)) return true;
+  }
+  return false;
 }
 
 /**
