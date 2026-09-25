@@ -91,6 +91,22 @@ export function understandMessageLocally(message, { buyer = null, lastAskedField
     return { facts, unsure, intents: ["empty"], signals, ack: null, source: "local" };
   }
 
+  const askedField = mapAskedField(lastAskedField);
+  const directAmount = text.match(
+    /^\s*(?:AED|Dhs|Dh)?\s*(\d[\d,]*(?:\.\d+)?\s*[MmKk]?)\s*$/
+  );
+  if (directAmount && (askedField === "cash" || askedField === "budget")) {
+    const amount = parseMoney(directAmount[1]);
+    if (amount !== null && amount > 0) {
+      facts[askedField] = amount;
+      intents.push("provide_facts");
+      ack =
+        askedField === "cash"
+          ? `Got it, you have around AED ${amount.toLocaleString("en-US")} for the initial payment.`
+          : `Got it, your budget is around AED ${amount.toLocaleString("en-US")}.`;
+    }
+  }
+
   const areaUnsure =
     /\b(?:don'?t know|dont know|do not know|not sure|no idea)\b[\s\S]{0,48}\b(?:which\s+)?area\b/i.test(text) ||
     /\b(?:which\s+)?area\b[\s\S]{0,48}\b(?:don'?t know|dont know|not sure|no idea)\b/i.test(text) ||

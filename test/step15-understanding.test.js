@@ -162,3 +162,14 @@ test("step 15l not an investment is remembered as end use", async () => {
   assert.deepEqual(result.buyer.propertyTypes, ["apartment"]);
   assert.equal(result.buyer.useType, "end_use");
 });
+
+test("step 15m amount-only reply answers the pending initial cash question", async () => {
+  const { engine } = await setupConversation();
+  await engine.handleMessage("ig_m2_u13", "Budget AED 3M, Yas, studio");
+  await engine.handleMessage("ig_m2_u13", "Cash");
+  const result = await engine.handleMessage("ig_m2_u13", "AED 85,000");
+
+  assert.equal(result.buyer.budgetAed, 3_000_000);
+  assert.equal(result.buyer.cashAvailableAed, 85_000);
+  assert.doesNotMatch(result.reply, /How much cash can you put in/i);
+});

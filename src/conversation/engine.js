@@ -51,10 +51,11 @@ export class ConversationEngine {
 
     let base = extractFactsFromMessage(text);
 
-    let understanding = understandMessageLocally(text, {
+    const localUnderstanding = understandMessageLocally(text, {
       buyer: existingBuyer,
       lastAskedField
     });
+    let understanding = localUnderstanding;
 
     if (this.llm && options.useLlm !== false) {
       const claudeUnderstanding = await understandMessageWithModel(this.llm, {
@@ -64,12 +65,23 @@ export class ConversationEngine {
         recentTurns
       });
       if (claudeUnderstanding) {
-        understanding = claudeUnderstanding;
+        understanding = mergeUnderstanding(localUnderstanding, claudeUnderstanding);
       }
     }
 
     const merged = mergeUnderstanding(base, understanding);
     let { facts, signals, intents, unsure, ack } = merged;
+    const directCashReply =
+      (lastAskedField === "cashAvailableAed" || lastAskedField === "cash") &&
+      /^\s*(?:AED|Dhs|Dh)?\s*\d[\d,]*(?:\.\d+)?\s*[MmKk]?\s*$/i.test(text);
+    if (
+      directCashReply &&
+      localUnderstanding.facts?.cash !== null &&
+      localUnderstanding.facts?.cash !== undefined
+    ) {
+      delete facts.budget;
+      facts.cash = localUnderstanding.facts.cash;
+    }
     // "I don't know" after an area question means area-flexible, not "ask area again".
     // Enforce this in code even if the optional model omits openToOtherAreas.
     if (unsure.includes("area") && !(facts.area || facts.areas)) {
