@@ -1,12 +1,12 @@
 :root {
-  --background: #000000;
-  --surface: #000000;
-  --text: #ffffff;
-  --secondary: #a3a3a3;
-  --border: #333333;
-  --soft: #232323;
-  --blue: #ffffff;
-  --blue-dark: #d4d4d4;
+  --background: #ffffff;
+  --surface: #ffffff;
+  --text: #111111;
+  --secondary: #737373;
+  --border: #dddddd;
+  --soft: #f0f0f0;
+  --blue: #111111;
+  --blue-dark: #333333;
 }
 
 * {
@@ -51,7 +51,7 @@ button {
 
 .eyebrow {
   margin: 0 0 12px;
-  color: #a8a8a8;
+  color: #737373;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -60,7 +60,7 @@ button {
 
 .aside h1 {
   margin: 0;
-  color: #ffffff;
+  color: #111111;
   font-size: 32px;
   font-weight: 600;
   letter-spacing: -0.025em;
@@ -69,14 +69,14 @@ button {
 
 .lede {
   margin: 12px 0 0;
-  color: #d0d0d0;
+  color: #444444;
   font-size: 16px;
   line-height: 1.55;
 }
 
 .details {
   margin: 32px 0 0;
-  border-top: 1px solid #3b3b3b;
+  border-top: 1px solid #dddddd;
 }
 
 .details div {
@@ -84,23 +84,23 @@ button {
   grid-template-columns: 112px 1fr;
   gap: 12px;
   padding: 11px 0;
-  border-bottom: 1px solid #3b3b3b;
+  border-bottom: 1px solid #dddddd;
   font-size: 14px;
 }
 
 .details dt {
-  color: #a8a8a8;
+  color: #737373;
 }
 
 .details dd {
   margin: 0;
-  color: #ffffff;
+  color: #111111;
   font-weight: 500;
 }
 
 .preview-note {
   margin: 18px 0 0;
-  color: #a8a8a8;
+  color: #737373;
   font-size: 13px;
   line-height: 1.5;
 }
@@ -111,7 +111,7 @@ button {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid #454545;
+  border: 1px solid #d8d8d8;
   border-radius: 6px;
   background: var(--surface);
 }
@@ -144,10 +144,10 @@ button {
   flex: 0 0 auto;
   display: grid;
   place-items: center;
-  border: 1px solid #505050;
+  border: 1px solid #d0d0d0;
   border-radius: 50%;
-  background: #161616;
-  color: #ffffff;
+  background: #f2f2f2;
+  color: #111111;
   font-size: 14px;
   font-weight: 600;
 }
@@ -176,13 +176,13 @@ button {
   padding: 7px 0 7px 8px;
   border: 0;
   background: transparent;
-  color: #ffffff;
+  color: #111111;
   font-size: 12px;
   font-weight: 500;
 }
 
 .icon-btn:hover {
-  color: #bdbdbd;
+  color: #555555;
 }
 
 .settings {
@@ -190,7 +190,7 @@ button {
   gap: 11px;
   padding: 14px 16px;
   border-bottom: 1px solid var(--border);
-  background: #111111;
+  background: #fafafa;
 }
 
 .settings[hidden],
@@ -204,7 +204,7 @@ button {
 .settings label {
   display: grid;
   gap: 5px;
-  color: #bdbdbd;
+  color: #555555;
   font-size: 12px;
 }
 
@@ -237,7 +237,7 @@ button {
   border: 1px solid var(--border);
   border-radius: 3px;
   background: var(--surface);
-  color: #ffffff;
+  color: #111111;
   font-size: 12px;
   font-weight: 500;
 }
@@ -287,7 +287,7 @@ button {
 
 .row.you .bubble {
   background: var(--blue);
-  color: #000000;
+  color: #ffffff;
 }
 
 .meta-line {
@@ -313,7 +313,7 @@ button {
   min-height: 36px;
   flex: 0 0 auto;
   padding: 0 13px;
-  border: 1px solid #666666;
+  border: 1px solid #b8b8b8;
   border-radius: 18px;
   background: var(--surface);
   color: var(--blue-dark);
@@ -323,7 +323,7 @@ button {
 }
 
 .choices button:hover {
-  background: #171717;
+  background: #f4f4f4;
 }
 
 .call-request {
@@ -361,7 +361,7 @@ button {
   border: 1px solid var(--border);
   border-radius: 3px;
   color: var(--text);
-  background: #0a0a0a;
+  background: #ffffff;
 }
 
 .call-request-row button {
@@ -370,7 +370,7 @@ button {
   border: 0;
   border-radius: 3px;
   background: var(--blue);
-  color: #000000;
+  color: #ffffff;
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
@@ -404,7 +404,7 @@ button {
 .call-request-row input:focus,
 .composer input:focus {
   outline: none;
-  border-color: #ffffff;
+  border-color: #111111;
 }
 
 .composer button {
@@ -418,7 +418,7 @@ button {
 }
 
 .composer button:hover {
-  color: #bdbdbd;
+  color: #555555;
 }
 
 .buyer-panel {
@@ -458,7 +458,7 @@ button {
 
 @media (max-width: 480px) {
   body {
-    background: #000000;
+    background: #ffffff;
   }
 
   .page {
