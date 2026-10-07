@@ -5,22 +5,27 @@ import { understandMessageLocally, mergeUnderstanding } from "../src/conversatio
 import { extractFactsFromMessage } from "../src/conversation/extract.js";
 import { polishReplyWithModel } from "../src/conversation/llm.js";
 
-test("step 15a not sure on budget offers ranges instead of repeating", async () => {
+test("step 15a uncertainty closes the asked use-type slot and advances with an explanation", async () => {
   const { engine } = await setupConversation();
   await engine.handleMessage("ig_m2_u1", "Hi");
   const unsure = await engine.handleMessage("ig_m2_u1", "Not sure");
-  assert.equal(unsure.stage, "qualifying");
-  assert.match(unsure.reply, /range|No problem/i);
+  assert.equal(unsure.stage, "exploring");
+  assert.match(unsure.reply, /No problem.*explain|entry price/i);
   assert.doesNotMatch(unsure.reply, /^What budget are you working with\?$/m);
-  assert.ok(unsure.nextQuestion?.choices?.length >= 3);
+  assert.equal(unsure.buyer.preferenceStates.useType, "flexible");
+  assert.equal(unsure.nextQuestion, null);
+  assert.doesNotMatch(unsure.reply, /buying.*investing.*exploring\?/i);
   assert.ok(unsure.unsure?.includes("budget") || unsure.intents.includes("unsure"));
 });
 
-test("step 15b around 2M sets budget", async () => {
+test("step 15b around 2M remembers budget and opens a useful priorities conversation", async () => {
   const { engine } = await setupConversation();
   const result = await engine.handleMessage("ig_m2_u2", "around 2M");
   assert.equal(result.buyer.budgetAed, 2_000_000);
-  assert.match(result.reply, /area|Yas|budget|doors|look/i);
+  assert.match(result.reply, /what should i optimise for/i);
+  assert.equal(result.nextQuestion?.field, "investmentObjective");
+  assert.ok(result.nextQuestion.choices.some(choice => choice.id === "you_choose" && choice.value === "UNDECIDED"));
+  assert.doesNotMatch(result.reply, /What budget|Which area/i);
 });
 
 test("step 15c maybe Yas but open to other areas", async () => {
@@ -62,11 +67,11 @@ test("step 15f local understand merges with regex extract", () => {
   assert.equal(merged.facts.bedrooms, 2);
 });
 
-test("step 15g unknown area becomes flexible and does not loop", async () => {
+test("step 15g unknown area advances to investment objectives without losing budget or cash", async () => {
   const { engine } = await setupConversation();
   await engine.handleMessage("ig_m2_u7", "2M");
   await engine.handleMessage("ig_m2_u7", "But I have like 300k for down payment");
-  const result = await engine.handleMessage("ig_m2_u7", "I dknt know");
+  const result = await engine.handleMessage("ig_m2_u7", "I don't know the area. I want the best ROI");
 
   assert.equal(result.buyer.budgetAed, 2_000_000);
   assert.equal(result.buyer.cashAvailableAed, 300_000);
@@ -76,8 +81,16 @@ test("step 15g unknown area becomes flexible and does not loop", async () => {
   );
   assert.doesNotMatch(result.reply, /Which area are you leaning toward/i);
   assert.doesNotMatch(result.reply, /Any area you want to start with/i);
-  assert.match(result.reply, /size|studio|bedroom|property type/i);
-  assert.equal(result.nextQuestion?.field, "propertyTypes");
+  assert.equal(result.buyer.useType, "investment");
+  assert.match(result.reply, /rental income|growth/i);
+  assert.equal(result.nextQuestion?.field, "exitHorizon");
+  assert.doesNotMatch(result.reply, /What budget|approved evidence/i);
+  const growth = await engine.handleMessage("ig_m2_u7", "Growth");
+  assert.equal(growth.buyer.investmentObjective, "growth");
+  assert.equal(growth.buyer.budgetAed, 2_000_000);
+  assert.equal(growth.buyer.cashAvailableAed, 300_000);
+  assert.notEqual(growth.nextQuestion?.field, "budgetAed");
+  assert.notEqual(growth.nextQuestion?.field, "preferredAreas");
 });
 
 test("step 15h local typo I dknt know maps to the last asked field", () => {
@@ -89,12 +102,15 @@ test("step 15h local typo I dknt know maps to the last asked field", () => {
   assert.ok(local.signals.includes("area_flexible"));
 });
 
-test("step 15i Claude polish preserves the code-owned next question", async () => {
+test("step 15i Claude composes one paraphrased code-owned question without appending", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => ({
     ok: true,
     async json() {
-      return { content: [{ type: "text", text: "AED 2M gives us a useful starting point." }] };
+      return { content: [{ type: "text", text: JSON.stringify({
+        message: "Your AED 2M budget gives us a useful starting point. Which area would you prefer?",
+        askedQuestion: true, questionField: "preferredAreas", claims: [], proposedActions: []
+      }) }] };
     }
   });
   try {
@@ -116,7 +132,9 @@ test("step 15i Claude polish preserves the code-owned next question", async () =
       }
     );
     assert.match(reply, /useful starting point/);
-    assert.ok(reply.endsWith(question));
+    assert.ok(reply.endsWith("Which area would you prefer?"));
+    assert.equal((reply.match(/\?/g) || []).length, 1);
+    assert.doesNotMatch(reply, /Which area are you leaning toward/);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -163,15 +181,16 @@ test("step 15l not an investment is remembered as end use", async () => {
   assert.equal(result.buyer.useType, "end_use");
 });
 
-test("step 15m amount-only reply answers the pending initial cash question", async () => {
-  const { engine } = await setupConversation();
+test("step 15m amount-only reply to a genuine pending cash question does not overwrite budget", async () => {
+  const { engine, memory } = await setupConversation();
   await engine.handleMessage("ig_m2_u13", "Budget AED 3M, Yas, studio");
-  const financing = await engine.handleMessage("ig_m2_u13", "Cash");
+  // Ordinary recommendations now use a payment-details next step. Simulate the
+  // separate cash question only where that information was actually requested.
+  memory.setLastAskedField("ig_m2_u13", "cashAvailableAed");
   const result = await engine.handleMessage("ig_m2_u13", "AED 85,000");
 
-  assert.doesNotMatch(financing.reply, /Yas Studio One by/i);
   assert.equal(result.buyer.budgetAed, 3_000_000);
   assert.equal(result.buyer.cashAvailableAed, 85_000);
   assert.doesNotMatch(result.reply, /How much cash can you put in/i);
-  assert.doesNotMatch(result.reply, /Yas Studio One by/i);
+  assert.notEqual(result.nextQuestion?.field, "cashAvailableAed");
 });

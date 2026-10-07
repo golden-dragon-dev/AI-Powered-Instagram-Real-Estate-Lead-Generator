@@ -1,3 +1,4 @@
+import { POLICY_VERSION } from "../src/conversation/policy.js";
 import http from "node:http";
 import { readFileSync, existsSync } from "node:fs";
 import path from "node:path";
@@ -15,6 +16,7 @@ import { IntegrationLog } from "../src/integrations/integration-log.js";
 import { InstagramConversationPoller } from "../src/integrations/instagram-poller.js";
 import { runtimeRoot } from "../src/integrations/json-store.js";
 import { getInstagramAccountIdentity, subscribeInstagramMessaging } from "../src/integrations/meta.js";
+import { webhookResponse } from "../src/integrations/webhook-response.js";
 
 loadEnv();
 
@@ -58,6 +60,8 @@ function llmStatus() {
   const enabled = Boolean(llm?.apiKey);
   const key = llm?.apiKey || "";
   return {
+    policyVersion: POLICY_VERSION,
+    promptSource: "prompts/conversation-policy.md",
     claudeEnabled: enabled,
     model: enabled ? llm.model : null,
     keyHint: enabled && key.length >= 4 ? `…${key.slice(-4)}` : null,
@@ -127,8 +131,10 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "GET" && url.pathname === "/api/health") {
+    const { keyHint, ...publicLlmStatus } = llmStatus();
     return sendJson(res, 200, {
       ok: true,
+      deploymentCommit: process.env.RAILWAY_GIT_COMMIT_SHA || null,
       source: store.source || "local",
       milestone: 3,
       integrations: {
@@ -143,7 +149,7 @@ const server = http.createServer(async (req, res) => {
             process.env.WHATSAPP_TEMPLATE_NAME
         )
       },
-      ...llmStatus()
+      ...publicLlmStatus
     });
   }
 
@@ -154,23 +160,13 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "POST" && (url.pathname === "/webhook/meta" || url.pathname === "/api/meta/webhook")) {
-    try {
-      const raw = await readRawBody(req);
-      const outcome = await orchestrator.handleWebhook({
-        rawBody: raw,
-        signatureHeader: req.headers["x-hub-signature-256"]
-      });
-      if (!outcome.ok) return sendJson(res, outcome.status || 400, { error: outcome.error });
-      return sendJson(res, 200, { ok: true, accepted: outcome.accepted });
-    } catch (error) {
-      await integrationLog.record({
-        integration: "meta",
-        operation: "webhook",
-        status: "error",
-        message: error.message
-      });
-      return sendJson(res, 200, { ok: true, accepted: 0, deferredError: true });
-    }
+    const { status, body } = await webhookResponse({
+      readBody: () => readRawBody(req),
+      signatureHeader: req.headers["x-hub-signature-256"],
+      orchestrator,
+      log: integrationLog
+    });
+    return sendJson(res, status, body);
   }
 
   if (req.method === "GET" && url.pathname === "/api/integrations/errors") {
@@ -346,6 +342,7 @@ const server = http.createServer(async (req, res) => {
       const outcome = await orchestrator.processCallRequest({
         userId,
         phone,
+        messageId: body.requestId || null,
         useLlm: false
       });
       const result = outcome.result;
@@ -353,7 +350,7 @@ const server = http.createServer(async (req, res) => {
         reply: result.reply,
         stage: result.stage,
         alertRecommended: Boolean(result.alertRecommended),
-        callRequestSubmitted: true,
+        callRequestSubmitted: Boolean(result.callRequestSubmitted),
         callSummary: result.callSummary || null,
         notification: outcome.alert,
         buyer: {
@@ -411,6 +408,9 @@ server.listen(PORT, HOST, () => {
       console.warn(`Instagram token identity lookup failed: ${error.message}`);
     });
 
+  const retryTimer = setInterval(() => orchestrator.retryPending().catch(error => console.warn(`Integration retry failed: ${error.message}`)), 30000);
+  retryTimer.unref();
+  orchestrator.retryPending().catch(error => console.warn(`Integration recovery failed: ${error.message}`));
   instagramPoller.start();
   console.log(
     String(process.env.INSTAGRAM_POLLER_ENABLED || "true").toLowerCase() === "false"

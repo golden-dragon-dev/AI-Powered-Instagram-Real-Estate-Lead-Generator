@@ -10,10 +10,15 @@ export class DurableConversationMemory extends ConversationMemory {
     super();
     this.store = new JsonFileStore(path.join(rootDir || runtimeRoot(), "conversation-memory.json"));
     this.ready = this.#hydrate();
+    this.pendingWrite = Promise.resolve();
   }
 
   async ensureReady() {
     await this.ready;
+  }
+
+  async flush() {
+    await this.pendingWrite;
   }
 
   addTurn(instagramUserId, turn) {
@@ -39,19 +44,29 @@ export class DurableConversationMemory extends ConversationMemory {
     return result;
   }
 
+  recordPreferenceStates(instagramUserId, states = {}) {
+    const result = super.recordPreferenceStates(instagramUserId, states);
+    this.#persist();
+    return result;
+  }
+
   async #hydrate() {
-    const data = await this.store.read({ turns: {}, pending: {}, lastAsked: {} });
+    const data = await this.store.read({ turns: {}, pending: {}, lastAsked: {}, semanticQuestions: {} });
     this.turns = new Map(Object.entries(data.turns || {}));
     this.pending = new Map(Object.entries(data.pending || {}));
     this.lastAsked = new Map(Object.entries(data.lastAsked || {}));
+    this.semanticQuestions = new Map(Object.entries(data.semanticQuestions || {}));
   }
 
   #persist() {
     const payload = {
       turns: Object.fromEntries(this.turns),
       pending: Object.fromEntries(this.pending),
-      lastAsked: Object.fromEntries(this.lastAsked || [])
+      lastAsked: Object.fromEntries(this.lastAsked || []),
+      semanticQuestions: Object.fromEntries(this.semanticQuestions || [])
     };
-    this.store.write(payload).catch(() => {});
+    this.pendingWrite = this.store.write(structuredClone(payload));
+    // Keep synchronous memory methods safe until the engine awaits flush().
+    this.pendingWrite.catch(() => {});
   }
 }

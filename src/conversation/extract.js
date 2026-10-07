@@ -1,3 +1,4 @@
+import { normalizeBuyerText } from "./text.js";
 import {
   normalizeArea,
   normalizeBedrooms,
@@ -8,8 +9,11 @@ import {
 import { FINANCING_VALUES, USE_TYPES } from "../schema/fields.js";
 import { applyChoiceFacts } from "./choices.js";
 import { refineTurnIntent } from "./intent-policy.js";
+import { parseAdvisoryFacts } from "./advisory-memory.js";
+import { parseFlexiblePreferences } from "./preference-state.js";
 
 const AREA_LABELS = {
+  "yas canal": "Yas Canal",
   yas: "Yas Island",
   "yas island": "Yas Island",
   hudayriyat: "Hudayriyat Island",
@@ -61,17 +65,26 @@ const PROJECT_HINTS = {
  * Pull structured buyer facts from a free-text or quick-reply message.
  * Matching still happens in code; this only fills the buyer card.
  */
-export function extractFactsFromMessage(message) {
-  const text = String(message || "").trim();
+export function extractFactsFromMessage(message, { buyer = null, lastAskedField = null } = {}) {
+  const text = normalizeBuyerText(message).trim();
   let facts = {};
   const signals = [];
   if (!text) return { facts, signals, intents: ["empty"] };
 
-  const intents = detectIntents(text);
+  const intents = detectIntents(text, { lastAskedField });
+  if (/سعر|تكلفة|تسليم|متاح|متوفر|خطة السداد|خطة سداد/.test(text)) intents.push("ask_facts");
 
+  const project = extractProject(text);
+  // A project name is a target, not new bedroom/type/area requirements. For
+  // example, "price of Yas Studio One" must not change a saved 1BR to a studio.
+  const namedProject = Object.values(PROJECT_HINTS).includes(project);
+  const criteriaText = namedProject ? text.replace(new RegExp(project.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "ig"), " ") : text;
   // Editable quick-reply / choice aliases first, then free-text extractors.
-  facts = applyChoiceFacts(text, facts);
+  facts = applyChoiceFacts(criteriaText, facts, { buyer, lastAskedField });
 
+  const arabicBudget = text.match(/ميزانيتي\s*(\d+(?:\.\d+)?\s*[MK]?)/i);
+  if (arabicBudget) facts.budget = parseMoney(arabicBudget[1]);
+  if (/عائد|\broi\b/i.test(text) && !/\b(?:not|don'?t|do not)\b.{0,24}\broi\b/i.test(text)) facts.useType = "investment";
   const budget = extractBudget(text);
   if (budget !== null) facts.budget = budget;
 
@@ -87,19 +100,18 @@ export function extractFactsFromMessage(message) {
     delete facts.financing;
   }
 
-  const area = extractArea(text);
+  const area = extractArea(criteriaText);
   if (area) facts.area = area;
 
-  const bedrooms = extractBedrooms(text);
+  const bedrooms = extractBedrooms(criteriaText);
   if (bedrooms !== null) facts.bedrooms = bedrooms;
 
-  const propertyType = extractPropertyType(text);
+  const propertyType = extractPropertyType(criteriaText);
   if (propertyType) facts.propertyType = propertyType;
 
   const developer = extractDeveloper(text);
   if (developer) facts.developer = developer;
 
-  const project = extractProject(text);
   if (project) facts.project = project;
 
   const financing = extractFinancing(text);
@@ -128,22 +140,35 @@ export function extractFactsFromMessage(message) {
   if (intents.includes("callback")) signals.push("callback_request");
   if (intents.includes("agent")) signals.push("agent_request");
 
+  facts = { ...facts, ...parseAdvisoryFacts(text, { buyer, lastAskedField }) };
+  const flexible = parseFlexiblePreferences(text, { buyer: { ...buyer, ...(facts.useType ? { useType: facts.useType } : {}) }, lastAskedField });
+  facts = { ...facts, ...flexible.facts };
+  if (flexible.unsure.length) intents.push("unsure");
+  if (facts.removedAreas?.length) {
+    if (facts.removedAreas.includes(facts.area)) delete facts.area;
+    intents.push("correction");
+  }
+  if (facts.investmentGoal || facts.investmentStrategy || facts.investmentObjective || facts.objections?.length || facts.budgetFlexible !== undefined) intents.push("advisory");
   const refined = refineTurnIntent({ intents, signals, facts, message: text });
   return {
     facts: refined.facts,
     signals: refined.signals,
-    intents: refined.intents
+    intents: refined.intents,
+    unsure: flexible.unsure
   };
 }
 
-export function detectIntents(message) {
+export function detectIntents(message, { lastAskedField = null } = {}) {
   const text = String(message || "").toLowerCase();
   const intents = [];
 
   if (/^\s*(hi|hello|hey|good\s+(morning|afternoon|evening)|salam|assalam)/i.test(message)) {
     intents.push("greet");
   }
-  if (/\b(start\s+fresh|start\s+over|new\s+search|reset\s+(my\s+)?search)\b/i.test(text)) {
+  if (/\b(start\s+fresh|start\s+over|new\s+search|reset\s+(my\s+)?search|start\s+again)\b/i.test(text)) {
+    intents.push("start_fresh");
+  }
+  if (/^\s*(?:(?:let'?s\s+)?restart|fresh)(\s+please)?[.!?]?\s*$/i.test(text)) {
     intents.push("start_fresh");
   }
   if (/^(continue|continue\s+please|pick\s+up|keep\s+going)([.!]?)$/i.test(text.trim())) {
@@ -161,8 +186,10 @@ export function detectIntents(message) {
     intents.push("search");
   }
   const viewingMention = /\b(viewing|visit|tour|see it|site visit)\b/i.test(text);
+  const investmentHolding = /\bhold(?:ing)?\b.{0,40}\b(?:\d+(?:\.\d+)?\s*years?|long(?:er|[- ]term)?|after (?:handover|completion))\b|\blong[- ]term\s+hold\b/i.test(text)
+    || (["exitHorizon", "handoverStrategy"].includes(lastAskedField) && /^(?:hold(?:ing)?(?: it)?)[.!?]*$/i.test(text.trim()));
   const reserveMention =
-    /\b(reserve|hold|secure)\b/i.test(text) ||
+    /\b(reserve|secure)\b/i.test(text) || (/\bhold\b/i.test(text) && !investmentHolding) ||
     (/\b(book|booking)\b/i.test(text) && !viewingMention);
   if (reserveMention) {
     intents.push("reserve");
@@ -173,7 +200,7 @@ export function detectIntents(message) {
   if (/\b(call me|callback|phone me|whatsapp me|contact me)\b/i.test(text)) {
     intents.push("callback");
   }
-  if (/\b(agent|human|advisor|speak to|talk to (a |an )?(person|someone|sales))\b/i.test(text)) {
+  if (/\b(agent|human|advisor|speak to|talk to (a |an )?(person|someone|sales))\b/i.test(text) && !/\b(already (?:have|has) (?:an? )?agent|have my own agent|working with (?:an? )?agent)\b/i.test(text)) {
     intents.push("agent");
   }
   if (/\b(i want to buy|ready to buy|want this unit|buy this)\b/i.test(text)) {
@@ -207,6 +234,8 @@ export function detectIntents(message) {
 const MONEY_TOKEN = "(\\d[\\d,]*(?:\\.\\d+)?\\s*[MmKk]?)";
 
 function extractBudget(text) {
+  // Additional stretch is consent to a disclosed alternative, not a new budget.
+  if (/\bstretch\b|\b(?:extra|another)\s+(?:AED\s*)?\d/i.test(text) && !/\bbudget\s+(?:is|now|of|to)\b/i.test(text)) return null;
   const patterns = [
     new RegExp(
       `(?:budget(?:\\s+is|\\s+of)?|up to|around|about|max(?:imum)?)\\s*(?:of\\s*)?(?:AED|Dhs|Dh)?\\s*${MONEY_TOKEN}`,
@@ -283,6 +312,8 @@ function extractCash(text) {
 }
 
 function extractArea(text) {
+  const arabic = [["ياس", "Yas Island"], ["السعديات", "Saadiyat Island"], ["الريم", "Al Reem Island"]].find(([name]) => text.includes(name));
+  if (arabic) return arabic[1];
   const forgottenPattern = new RegExp(
     `\\b(?:forget|ignore|skip|not|no more)\\s+(?:about\\s+)?(${AREA_SOURCE})\\b`,
     "gi"
@@ -370,7 +401,7 @@ function extractProject(text) {
     if (lower.includes(hint)) return label;
   }
   const named = text.match(/\bproject\s+([A-Za-z0-9][A-Za-z0-9\s]{2,40})/i);
-  if (named) return named[1].trim();
+  if (named && !/^(do|are|is|can|would|should|know|have)\b/i.test(named[1])) return named[1].trim();
   return null;
 }
 
@@ -388,11 +419,13 @@ function extractUseType(text) {
     /\bend\s*use\b/i.test(text) ||
     /\blive\s+in\b/i.test(text) ||
     /\bfor\s+(my\s+)?family\b/i.test(text) ||
+    /\b(?:for my (?:own )?home|buying (?:my |a |an? )?home|my own home)\b/i.test(text) ||
     /\bnot\s+(?:an?\s+)?investment\b/i.test(text)
   ) {
     return "end_use";
   }
-  if (/\binvest(ment|or)?\b/i.test(text) || /\brental\s+yield\b/i.test(text)) return "investment";
+  if (/\b(?:not|don'?t|do not)\s+(?:want|need|interested in|looking for)?\s*(?:an?\s+)?(?:investment|investing|roi)\b/i.test(text)) return null;
+  if (/\binvest(ment|or|ing)?\b/i.test(text) || /\brental\s+yield\b/i.test(text)) return "investment";
   return USE_TYPES.includes(text) ? text : null;
 }
 

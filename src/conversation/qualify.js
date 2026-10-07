@@ -1,4 +1,6 @@
 import { choicesForField } from "./choices.js";
+import { isFlexiblePreference } from "./preference-state.js";
+import { isInvestmentDiscoveryReady } from "./investment-strategy.js";
 
 const FIELD_LABELS = {
   budgetAed: "budget",
@@ -33,22 +35,26 @@ export function qualificationGaps(
   { includeCash = false, includeFinancing = false, includeContact = false, includeUseType = false } = {}
 ) {
   const missing = [];
+  const advisorLed = isInvestmentDiscoveryReady(buyer);
   const hasAreaOrProject = Boolean(
     buyer.preferredAreas?.length ||
       buyer.projectInterest ||
       buyer.openToOtherAreas ||
-      buyer.intentSignals?.includes("area_flexible")
+      buyer.areaFlexibility === "open" ||
+      buyer.intentSignals?.includes("area_flexible") ||
+      isFlexiblePreference(buyer, "preferredAreas")
   );
-  const hasTypeOrBeds = Boolean(buyer.propertyTypes?.length || (buyer.bedrooms && buyer.bedrooms.length));
+  const hasTypeOrBeds = Boolean(buyer.propertyTypes?.length || buyer.bedrooms?.length || buyer.propertyTypeFlexibility ||
+    isFlexiblePreference(buyer, "propertyTypes") || isFlexiblePreference(buyer, "bedrooms"));
 
-  if (buyer.budgetAed === null || buyer.budgetAed === undefined) missing.push("budgetAed");
-  if (!hasAreaOrProject) missing.push("preferredAreas");
-  if (!hasTypeOrBeds) missing.push("propertyTypes");
+  if ((buyer.budgetAed === null || buyer.budgetAed === undefined) && !isFlexiblePreference(buyer, "budgetAed")) missing.push("budgetAed");
+  if (!hasAreaOrProject && !advisorLed) missing.push("preferredAreas");
+  if (!hasTypeOrBeds && !advisorLed) missing.push("propertyTypes");
   if (includeUseType && (!buyer.useType || buyer.useType === "unknown")) missing.push("useType");
-  if (includeCash && (buyer.cashAvailableAed === null || buyer.cashAvailableAed === undefined)) {
+  if (includeCash && (buyer.cashAvailableAed === null || buyer.cashAvailableAed === undefined) && !isFlexiblePreference(buyer, "cashAvailableAed")) {
     missing.push("cashAvailableAed");
   }
-  if (includeFinancing && (!buyer.financing || buyer.financing === "unknown")) {
+  if (includeFinancing && (!buyer.financing || buyer.financing === "unknown") && !isFlexiblePreference(buyer, "financing")) {
     missing.push("financing");
   }
   if (includeContact && !buyer.contactDeclined) {
@@ -73,7 +79,7 @@ export function nextQualificationQuestion(buyer, options = {}) {
 }
 
 export function isCoreQualified(buyer) {
-  return qualificationGaps(buyer).length === 0;
+  return Number.isFinite(buyer.budgetAed) && buyer.budgetAed > 0 && qualificationGaps(buyer).length === 0;
 }
 
 export function summarizeBuyer(buyer) {
@@ -92,5 +98,7 @@ export function summarizeBuyer(buyer) {
   if (buyer.financing && buyer.financing !== "unknown") {
     parts.push(buyer.financing.replace("_", " "));
   }
+  if (buyer.investmentObjective) parts.push(`investment objective ${buyer.investmentObjective.replaceAll("_", " ")}`);
+  if (buyer.holdingPeriod) parts.push(`holding period ${buyer.holdingPeriod} years`);
   return parts.join(", ") || "no filters yet";
 }

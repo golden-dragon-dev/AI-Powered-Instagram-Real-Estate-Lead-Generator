@@ -10,7 +10,9 @@ test("step 11a matched reply passes fact check", async () => {
     "ig_m2_fc1",
     "AED 3M budget, Yas, 3 bedroom, 500k cash, payment plan"
   );
-  assert.equal(result.matchCount, 1);
+  assert.ok(result.matchCount >= 1 && result.matchCount <= 2);
+  assert.equal(result.matches[0].project.name, "Yas Park Views");
+  if (result.advisor.challenger) assert.ok(result.advisor.challenger.reasonCodes.length);
   assert.ok(result.check.ok);
   assert.equal(result.check.violations.length, 0);
   assert.match(result.reply, /2,600,000|2600000/);
@@ -47,7 +49,7 @@ test("step 11c missing price project stays not confirmed", async () => {
   }
 });
 
-test("step 11d high intent offers Request a Call without inventing numbers", async () => {
+test("step 11d high intent offers follow-up channel without inventing numbers", async () => {
   const { engine } = await setupConversation();
   await engine.handleMessage(
     "ig_m2_fc4",
@@ -57,9 +59,9 @@ test("step 11d high intent offers Request a Call without inventing numbers", asy
   assert.ok(result.signals.includes("reserve_interest") || result.intents.includes("request_call"));
   assert.equal(result.buyer.leadStatus, "engaged");
   assert.equal(result.alertRecommended, false);
-  assert.ok(result.callRequest?.offered);
+  assert.equal(result.pendingOffer?.type, "contact_channel");
   assert.ok(result.check.ok);
-  assert.match(result.reply, /Request a Call|number you would like us to call|advisor/i);
+  assert.match(result.reply, /Instagram or on WhatsApp/i);
   assert.doesNotMatch(result.reply, /AED\s*1,\d{3},\d{3}/);
 });
 

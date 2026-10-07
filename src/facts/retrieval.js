@@ -1,16 +1,39 @@
+import { approvedFresh, factPolicy } from "./freshness.js";
 import { formatAed } from "../matching/normalize.js";
+import { commercialOfferGate } from "./commercial-offers.js";
+import { analyzePaymentSchedule } from "../conversation/payment-analysis.js";
+import { confirmedEvidenceClass } from "./advisor-claims.js";
 
-function field(value) {
+function field(value, provenance = {}) {
   const confirmed = value !== null && value !== undefined && value !== "";
   return {
     value: confirmed ? value : null,
-    confirmed
+    confirmed,
+    ...provenance
   };
 }
 
-export function buildFactPack(match) {
+export function buildFactPack(match, options = {}) {
   const { project, unit, downPaymentAed, bedroomLabel, fit = null } = match;
-  return {
+  const policy = options.policy || factPolicy();
+  const fresh = approvedFresh(project, { now: options.now, maxAgeDays: policy.commercialDays });
+  const available = approvedFresh(project, { now: options.now, maxAgeDays: policy.availabilityDays });
+  const offer = unit.commercialOffer || null;
+  const gate = offer ? commercialOfferGate(offer, { now: options.now, policy }) : null;
+  const quoteFresh = offer ? gate.ok : fresh;
+  const projectEvidence = { source: project.source, recordId: project.id, scope: "project_knowledge", verifiedAt: project.lastVerified || null };
+  Object.assign(projectEvidence, { evidenceClass: "FACT", confidence: project.confidence || "Unrated" });
+  const unitEvidence = { ...projectEvidence, recordId: unit.inventoryUnitId || unit.id, scope: "unit_type" };
+  const commercialEvidence = offer
+    ? { source: offer.commercialSource, recordId: offer.sourceRecordId || offer.id, scope: offer.priceBasis, verifiedAt: offer.checkedOn, offerId: offer.offerId }
+    : { ...projectEvidence, recordId: unit.id, scope: "unit_type_starting_price" };
+  const commercial = value => field(quoteFresh ? value : null, commercialEvidence);
+  const initial = offer ? offer.initialPaymentAed : downPaymentAed;
+  const payment = offer && gate.ok ? analyzePaymentSchedule(unit.paymentSchedule, {
+    priceAed: offer.price, projectId: project.id, offerId: offer.offerId, offerRecordId: offer.id || offer.sourceRecordId, planId: offer.planId, now: options.now
+  }) : null;
+  const scheduleSummary = payment?.status === "COMPLETE" ? payment.milestones.map(m => `${m.kind.replaceAll("_", " ")} ${m.percent}%`).join("; ") : null;
+  const pack = {
     fit,
     projectId: project.id,
     unitId: unit.id,
@@ -21,23 +44,52 @@ export function buildFactPack(match) {
     propertyType: field(unit.propertyType),
     bedrooms: field(unit.bedrooms),
     bedroomLabel: field(bedroomLabel),
-    startingPriceAed: field(unit.startingPriceAed),
-    startingPriceText: field(formatAed(unit.startingPriceAed)),
+    offerId: offer?.offerId || null,
+    planId: field(offer?.planId || unit.planId, commercialEvidence),
+    commercialGate: gate,
+    paymentAnalysis: payment,
+    startingPriceAed: commercial(offer ? offer.price : unit.startingPriceAed),
+    startingPriceText: commercial(formatAed(offer ? offer.price : unit.startingPriceAed)),
     sizeSqftFrom: field(unit.sizeSqftFrom),
     sizeSqftTo: field(unit.sizeSqftTo),
-    downPaymentAed: field(downPaymentAed),
-    downPaymentText: field(formatAed(downPaymentAed)),
-    paymentPlanAvailable: field(project.paymentPlanAvailable),
-    paymentPlanSummary: field(project.paymentPlanSummary),
-    handover: field(project.handover),
+    downPaymentAed: commercial(initial),
+    downPaymentText: commercial(formatAed(initial)),
+    paymentPlanAvailable: commercial(offer ? (payment?.status === "COMPLETE" ? true : null) : project.paymentPlanAvailable),
+    paymentPlanSummary: commercial(offer ? scheduleSummary : project.paymentPlanSummary),
+    handover: commercial(offer ? offer.handover : project.handover),
     status: field(project.status),
-    availability: field(unit.availability),
-    availabilityNotes: field(project.availabilityNotes),
+    availability: field((offer ? gate.ok : available) && unit.availability !== "Unknown" ? unit.availability : null, commercialEvidence),
+    availabilityNotes: field(!offer && available ? project.availabilityNotes : null, commercialEvidence),
     description: field(project.description),
     features: field(project.features),
-    source: field(project.source),
-    lastVerified: field(project.lastVerified)
+    source: field(offer ? offer.commercialSource : project.source),
+    lastVerified: field(offer ? offer.checkedOn : project.lastVerified)
   };
+  for (const [key, fact] of Object.entries(pack)) {
+    if (!fact || typeof fact !== "object" || !("confirmed" in fact) || fact.source) continue;
+    Object.assign(fact, ["propertyType", "bedrooms", "bedroomLabel", "sizeSqftFrom", "sizeSqftTo"].includes(key) ? unitEvidence : projectEvidence);
+  }
+  if (payment?.status === "COMPLETE") {
+    const row = payment.evidence[0];
+    const provenance = { source: row.source, recordId: row.sourceRecordId, scope: row.scope, verifiedAt: row.verifiedOn,
+      evidenceClass: "CALCULATION", confidence: row.confidence || "Unrated" };
+    for (const key of ["bookingAed", "cash30DaysAed", "cash6MonthsAed", "cash12MonthsAed", "cashBeforeHandoverAed", "cashAtHandoverAed", "cashAfterHandoverAed"]) pack[key] = field(payment[key], provenance);
+  }
+  return pack;
+}
+
+/** Knowledge has its own scope and cannot turn a known project into a quote. */
+export function buildProjectKnowledgePack(project) {
+  const evidence = { source: project.source, recordId: project.id, scope: "project_knowledge", verifiedAt: project.lastVerified || null };
+  Object.assign(evidence, { evidenceClass: "FACT", confidence: project.confidence || "Unrated" });
+  const pack = { projectId: project.id, unitId: null, knowledgeOnly: true };
+  const values = { name: project.name, developer: project.developerName, emirate: project.emirate,
+    area: project.area, status: project.status, description: project.description, features: project.features };
+  for (const [key, value] of Object.entries(values)) pack[key] = field(value, evidence);
+  for (const key of ["bedrooms", "bedroomLabel", "propertyType", "sizeSqftFrom", "sizeSqftTo", "startingPriceAed", "startingPriceText", "downPaymentAed", "downPaymentText", "paymentPlanAvailable", "paymentPlanSummary", "handover", "availability", "availabilityNotes"]) pack[key] = field(null);
+  pack.source = field(project.source, evidence);
+  pack.lastVerified = field(project.lastVerified, evidence);
+  return pack;
 }
 
 export function retrieveFacts(matches) {
@@ -49,7 +101,7 @@ export function missingCommercialFields(pack) {
   return keys.filter((key) => !pack[key].confirmed);
 }
 
-export function collectAllowedClaims(packs) {
+export function collectAllowedClaims(packs, evidenceClaims = []) {
   const amounts = new Set();
   const percents = new Set();
   const dates = new Set();
@@ -57,8 +109,11 @@ export function collectAllowedClaims(packs) {
   const phrases = new Set();
 
   for (const pack of packs) {
+    for (const key of ["bookingAed", "cash30DaysAed", "cash6MonthsAed", "cash12MonthsAed", "cashBeforeHandoverAed", "cashAtHandoverAed", "cashAfterHandoverAed"]) {
+      if (pack[key]?.confirmed) amounts.add(Number(pack[key].value));
+    }
     for (const key of ["startingPriceAed", "downPaymentAed", "sizeSqftFrom", "sizeSqftTo", "bedrooms"]) {
-      if (pack[key].confirmed) amounts.add(Number(pack[key].value));
+      if (pack[key]?.confirmed) amounts.add(Number(pack[key].value));
     }
     if (pack.paymentPlanSummary.confirmed) {
       const plan = String(pack.paymentPlanSummary.value);
@@ -90,6 +145,21 @@ export function collectAllowedClaims(packs) {
     if (pack.name.confirmed) phrases.add(String(pack.name.value).toLowerCase());
     if (pack.developer.confirmed) phrases.add(String(pack.developer.value).toLowerCase());
     if (pack.area.confirmed) phrases.add(String(pack.area.value).toLowerCase());
+  }
+
+  for (const claim of evidenceClaims) {
+    if (!confirmedEvidenceClass(claim)) continue;
+    if (!claim?.evidenceId || !claim.source || !claim.recordId || !claim.scope || !claim.verifiedAt) continue;
+    if (typeof claim.value === "number" && Number.isFinite(claim.value)) {
+      if (claim.field === "observedChangePct" && claim.evidenceClass === "CALCULATION" &&
+          claim.calculationInputs && claim.inputEvidence?.length >= 2) percents.add(String(claim.value));
+      else amounts.add(claim.value);
+    }
+    if (typeof claim.value === "string") {
+      if (claim.field !== "investmentEvidence") phrases.add(claim.value.toLowerCase());
+      for (const date of claim.value.match(/\b20\d{2}\b|Q[1-4]\s*20\d{2}/gi) || []) dates.add(date.toUpperCase());
+    }
+    for (const date of String(claim.verifiedAt).match(/\b20\d{2}\b/g) || []) dates.add(date);
   }
 
   return { amounts, percents, dates, availability, phrases };
